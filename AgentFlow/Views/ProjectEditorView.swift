@@ -300,9 +300,6 @@ struct ProjectEditorView: View {
                     onPermissionModeChange: { mode in
                         project.nodes[node.id]?.configuration.triggerType = mode
                     },
-                    onRename: { name in
-                        project.nodes[node.id]?.title = name
-                    },
                     onDelete: {
                         project.removeNode(node.id)
                         conversations.removeValue(forKey: node.id)
@@ -316,9 +313,6 @@ struct ProjectEditorView: View {
                 isSelected: isSelected,
                 isTitleHovered: isTitleHovered,
                 session: session,
-                onRename: { name in
-                    project.nodes[node.id]?.title = name
-                },
                 onDelete: {
                     project.removeNode(node.id)
                     terminalSessions.removeValue(forKey: node.id)

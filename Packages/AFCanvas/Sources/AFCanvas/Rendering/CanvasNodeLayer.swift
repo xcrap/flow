@@ -6,6 +6,8 @@ public struct CanvasNodeLayer: View {
     let viewportSize: CGSize
     let nodeContent: (WorkflowNode, Bool, Bool) -> AnyView
     @State private var hoveredNodeID: UUID?
+    @State private var renamingNodeID: UUID?
+    @State private var renameText: String = ""
 
     private let viewportBuffer: Double = 500
 
@@ -43,6 +45,22 @@ public struct CanvasNodeLayer: View {
         ForEach(visibleNodes) { node in
             nodePanel(node)
         }
+        .alert("Rename", isPresented: Binding(
+            get: { renamingNodeID != nil },
+            set: { if !$0 { renamingNodeID = nil } }
+        )) {
+            TextField("Name", text: $renameText)
+            Button("OK") {
+                if let id = renamingNodeID {
+                    projectState.nodes[id]?.title = renameText
+                    projectState.onChange?()
+                }
+                renamingNodeID = nil
+            }
+            Button("Cancel", role: .cancel) {
+                renamingNodeID = nil
+            }
+        }
     }
 
     @ViewBuilder
@@ -51,11 +69,11 @@ public struct CanvasNodeLayer: View {
         let isTitleHovered = hoveredNodeID == node.id
 
         nodeContent(node, isSelected, isTitleHovered)
-            // Block canvas pan from firing through the node body
             .contentShape(Rectangle())
-            .highPriorityGesture(
-                DragGesture(minimumDistance: 100000) // never activates, but blocks canvas pan
-            )
+            .onTapGesture {
+                projectState.selectNode(node.id)
+                projectState.bringToFront(node.id)
+            }
             .overlay(alignment: .top) {
                 HStack(spacing: 0) {
                     // Left: drag handle + hover area
@@ -249,6 +267,11 @@ public struct CanvasNodeLayer: View {
 
     @ViewBuilder
     private func nodeContextMenu(for node: WorkflowNode) -> some View {
+        Button("Rename") {
+            renamingNodeID = node.id
+            renameText = node.title
+        }
+
         Button("Duplicate") {
             let newNode = WorkflowNode(
                 kind: node.kind,
@@ -262,6 +285,7 @@ public struct CanvasNodeLayer: View {
                 configuration: node.configuration
             )
             projectState.nodes[newNode.id] = newNode
+            projectState.bringToFront(newNode.id)
         }
 
         Divider()
