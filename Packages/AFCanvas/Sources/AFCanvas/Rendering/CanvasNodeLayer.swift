@@ -41,20 +41,9 @@ public struct CanvasNodeLayer: View {
         self.nodeContent = nodeContent
     }
 
-    @State private var clickMonitor: Any?
-
     public var body: some View {
         ForEach(visibleNodes) { node in
             nodePanel(node)
-        }
-        .onAppear {
-            clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
-                handleClick(event)
-                return event
-            }
-        }
-        .onDisappear {
-            if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
         }
         .alert("Rename", isPresented: Binding(
             get: { renamingNodeID != nil },
@@ -262,45 +251,6 @@ public struct CanvasNodeLayer: View {
                 projectState.canvasState.draggedNodeID = nil
                 projectState.clearDragStartPositions()
             }
-    }
-
-    private func handleClick(_ event: NSEvent) {
-        guard let window = event.window,
-              let contentView = window.contentView
-        else { return }
-
-        let windowPoint = event.locationInWindow
-        // AppKit Y is bottom-up, flip to top-down
-        let contentHeight = contentView.bounds.height
-        let clickPoint = CGPoint(x: windowPoint.x, y: contentHeight - windowPoint.y)
-
-        let zoom = projectState.canvasState.zoom
-        let orderedIDs = projectState.nodeZOrder.isEmpty ? Array(projectState.nodes.keys) : projectState.nodeZOrder
-
-        // Check topmost first (last in z-order)
-        for nodeID in orderedIDs.reversed() {
-            guard let node = projectState.nodes[nodeID] else { continue }
-
-            let screenCenter = projectState.canvasState.canvasToScreen(node.position.point)
-            let halfW = (node.position.width * zoom) / 2
-            let halfH = (node.position.height * zoom) / 2
-
-            let nodeRect = CGRect(
-                x: screenCenter.x - halfW,
-                y: screenCenter.y - halfH,
-                width: halfW * 2,
-                height: halfH * 2
-            )
-
-            if nodeRect.contains(clickPoint) {
-                projectState.selectNode(nodeID)
-                projectState.bringToFront(nodeID)
-                return
-            }
-        }
-
-        // Clicked empty canvas — deselect all
-        projectState.deselectAll()
     }
 
     @ViewBuilder

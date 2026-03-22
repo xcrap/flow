@@ -1,0 +1,87 @@
+import SwiftUI
+import AFCore
+
+struct ClickDetectorOverlay: NSViewRepresentable {
+    let projectState: ProjectState
+
+    func makeNSView(context: Context) -> ClickDetectorNSView {
+        let view = ClickDetectorNSView()
+        view.projectState = projectState
+        return view
+    }
+
+    func updateNSView(_ nsView: ClickDetectorNSView, context: Context) {
+        nsView.projectState = projectState
+    }
+}
+
+class ClickDetectorNSView: NSView {
+    var projectState: ProjectState?
+    private var monitor: Any?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+
+        // Remove old monitor
+        if let monitor { NSEvent.removeMonitor(monitor) }
+
+        guard window != nil else { return }
+
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            self?.handleClick(event)
+            return event // always pass through
+        }
+    }
+
+    override func removeFromSuperview() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+        super.removeFromSuperview()
+    }
+
+    private func handleClick(_ event: NSEvent) {
+        guard let projectState,
+              let _ = window
+        else { return }
+
+        // Convert window coords to THIS view's local coords
+        let localPoint = convert(event.locationInWindow, from: nil)
+        // Flip Y — NSView is bottom-up, SwiftUI canvas is top-down
+        let canvasClickPoint = CGPoint(x: localPoint.x, y: bounds.height - localPoint.y)
+
+        // Check if click is even within this view
+        guard bounds.contains(localPoint) else { return }
+
+        let zoom = projectState.canvasState.zoom
+        let orderedIDs = projectState.nodeZOrder.isEmpty
+            ? Array(projectState.nodes.keys)
+            : projectState.nodeZOrder
+
+        for nodeID in orderedIDs.reversed() {
+            guard let node = projectState.nodes[nodeID] else { continue }
+
+            let screenCenter = projectState.canvasState.canvasToScreen(node.position.point)
+            let halfW = (node.position.width * zoom) / 2
+            let halfH = (node.position.height * zoom) / 2
+
+            let nodeRect = CGRect(
+                x: screenCenter.x - halfW,
+                y: screenCenter.y - halfH,
+                width: halfW * 2,
+                height: halfH * 2
+            )
+
+            if nodeRect.contains(canvasClickPoint) {
+                Task { @MainActor in
+                    projectState.selectNode(nodeID)
+                    projectState.bringToFront(nodeID)
+                }
+                return
+            }
+        }
+
+        Task { @MainActor in
+            projectState.deselectAll()
+        }
+    }
+}

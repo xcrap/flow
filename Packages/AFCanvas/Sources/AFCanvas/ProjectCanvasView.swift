@@ -27,6 +27,9 @@ public struct ProjectCanvasView<NodeContent: View>: View {
                     }
                 )
             }
+            .background {
+                ClickDetectorOverlay(projectState: projectState)
+            }
             .contentShape(Rectangle())
             .gesture(canvasPanGesture)
             .gesture(canvasZoomGesture)
