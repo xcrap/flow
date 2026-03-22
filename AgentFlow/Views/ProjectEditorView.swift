@@ -131,38 +131,40 @@ struct ProjectEditorView: View {
     private func fitToScreen(project: ProjectState, viewportSize: CGSize) {
         guard !project.nodes.isEmpty else { return }
 
-        // Find bounds of all nodes
+        let nodes = Array(project.nodes.values)
+
+        // Calculate bounding box of all nodes
         var minX = Double.infinity, minY = Double.infinity
         var maxX = -Double.infinity, maxY = -Double.infinity
 
-        for node in project.nodes.values {
-            let left = node.position.x - node.position.width / 2
-            let top = node.position.y - node.position.height / 2
-            let right = node.position.x + node.position.width / 2
-            let bottom = node.position.y + node.position.height / 2
-            minX = min(minX, left)
-            minY = min(minY, top)
-            maxX = max(maxX, right)
-            maxY = max(maxY, bottom)
+        for node in nodes {
+            minX = min(minX, node.position.x - node.position.width / 2)
+            minY = min(minY, node.position.y - node.position.height / 2)
+            maxX = max(maxX, node.position.x + node.position.width / 2)
+            maxY = max(maxY, node.position.y + node.position.height / 2)
         }
 
-        let contentWidth = maxX - minX
-        let contentHeight = maxY - minY
-        let padding: Double = 80
+        let contentWidth = max(1, maxX - minX)
+        let contentHeight = max(1, maxY - minY)
+        let padding: Double = 60
 
-        let zoomX = (viewportSize.width - padding * 2) / contentWidth
-        let zoomY = (viewportSize.height - padding * 2) / contentHeight
-        let newZoom = max(0.1, min(1.5, min(zoomX, zoomY)))
+        // Zoom to fit all content with padding
+        let availW = max(1, viewportSize.width - padding * 2)
+        let availH = max(1, viewportSize.height - padding * 2)
+        let newZoom = max(0.15, min(1.5, min(availW / contentWidth, availH / contentHeight)))
 
-        let centerX = (minX + maxX) / 2
-        let centerY = (minY + maxY) / 2
+        // Center of all nodes in canvas space
+        let cx = (minX + maxX) / 2
+        let cy = (minY + maxY) / 2
+
+        // Offset so that canvas center maps to screen center
+        // screen = canvas * zoom + offset → offset = screenCenter - canvasCenter * zoom
+        let newOffsetX = viewportSize.width / 2 - cx * newZoom
+        let newOffsetY = viewportSize.height / 2 - cy * newZoom
 
         withAnimation(.spring(duration: 0.4)) {
             project.canvasState.zoom = newZoom
-            project.canvasState.offset = CGPoint(
-                x: viewportSize.width / 2 - centerX * newZoom,
-                y: viewportSize.height / 2 - centerY * newZoom
-            )
+            project.canvasState.offset = CGPoint(x: newOffsetX, y: newOffsetY)
         }
         project.onChange?()
     }
