@@ -104,40 +104,36 @@ struct ProjectEditorView: View {
     @ViewBuilder
     private func canvasArea(project: ProjectState) -> some View {
         GeometryReader { geo in
-            ZStack {
+            ZStack(alignment: .bottom) {
                 ProjectCanvasView(projectState: project) { node, isSelected, isTitleHovered in
                     nodePanel(node: node, isSelected: isSelected, isTitleHovered: isTitleHovered, project: project)
                 }
 
-                // Minimap bottom-left
-                VStack {
+                // Bottom bar: minimap left, controls right
+                HStack(alignment: .bottom) {
+                    CanvasMinimapView(projectState: project, viewportSize: geo.size)
+
                     Spacer()
-                    HStack {
-                        CanvasMinimapView(projectState: project, viewportSize: geo.size)
-                            .padding(12)
-                        Spacer()
-                    }
-                }
 
-                // Canvas controls
-                HStack(spacing: 6) {
-                    Button {
-                        tidyUp(project: project, viewportSize: geo.size)
-                    } label: {
-                        Image(systemName: "rectangle.3.group")
-                            .frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.bordered)
-                    .help("Tidy up")
+                    HStack(spacing: 6) {
+                        Button {
+                            tidyUp(project: project, viewportSize: geo.size)
+                        } label: {
+                            Image(systemName: "rectangle.3.group")
+                                .frame(width: 28, height: 28)
+                        }
+                        .buttonStyle(.bordered)
+                        .help("Tidy up")
 
-                    Button {
-                        fitToScreen(project: project, viewportSize: geo.size)
-                    } label: {
-                        Image(systemName: "arrow.up.backward.and.arrow.down.forward")
-                            .frame(width: 28, height: 28)
+                        Button {
+                            fitToScreen(project: project, viewportSize: geo.size)
+                        } label: {
+                            Image(systemName: "arrow.up.backward.and.arrow.down.forward")
+                                .frame(width: 28, height: 28)
+                        }
+                        .buttonStyle(.bordered)
+                        .help("Fit to screen")
                     }
-                    .buttonStyle(.bordered)
-                    .help("Fit to screen")
                 }
                 .padding(12)
             }
