@@ -1,56 +1,7 @@
 import Foundation
 import AFCore
 
-/// Manages a persistent codex app-server process per working directory
-private actor CodexSession {
-    var process: Process?
-    var writer: FileHandle?
-    var reader: FileHandle?
-    var threadID: String?
-    var initialized = false
-    var nextID = 10
-    nonisolated(unsafe) var pendingSetter: ((AsyncThrowingStream<StreamEvent, Error>.Continuation?) -> Void)?
-
-    func getNextID() -> Int {
-        nextID += 1
-        return nextID
-    }
-
-    func setProcess(_ p: Process, writer w: FileHandle, reader r: FileHandle) {
-        process = p
-        writer = w
-        reader = r
-    }
-
-    func setThreadID(_ id: String) { threadID = id }
-    func setInitialized() { initialized = true }
-    func setPendingSetter(_ s: ((AsyncThrowingStream<StreamEvent, Error>.Continuation?) -> Void)?) { pendingSetter = s }
-    func setPending(_ c: AsyncThrowingStream<StreamEvent, Error>.Continuation?) { pendingSetter?(c) }
-
-    func isAlive() -> Bool {
-        process?.isRunning == true
-    }
-
-    func terminate() {
-        process?.terminate()
-        process = nil
-        writer = nil
-        reader = nil
-        threadID = nil
-        initialized = false
-    }
-
-    func write(_ method: String, id: Int, params: [String: Any]) {
-        guard let writer else { return }
-        let msg: [String: Any] = ["jsonrpc": "2.0", "method": method, "id": id, "params": params]
-        if let data = try? JSONSerialization.data(withJSONObject: msg),
-           var str = String(data: data, encoding: .utf8) {
-            str += "\n"
-            writer.write(str.data(using: .utf8)!)
-        }
-    }
-}
-
+/// Simple Codex provider — spawns `codex exec` per message (like Claude's -p mode)
 public final class CodexProvider: AIProvider, Sendable {
     public let id = "codex"
     public let displayName = "Codex (OpenAI)"
@@ -59,7 +10,7 @@ public final class CodexProvider: AIProvider, Sendable {
         AIModel(id: "gpt-5.4", name: "GPT-5.4", contextWindow: 200_000),
     ]
 
-    private let session = CodexSession()
+    private let holder = ProcessHolder()
 
     public init() {}
 
@@ -76,43 +27,23 @@ public final class CodexProvider: AIProvider, Sendable {
         AsyncThrowingStream { continuation in
             Task {
                 do {
-                    // Ensure app-server is running
-                    let alive = await session.isAlive()
-                    if !alive {
-                        try await self.startServer(workingDirectory: workingDirectory, systemPrompt: systemPrompt)
-                    }
-
-                    // Wait for thread to be ready
-                    let threadID = await session.threadID
-                    guard let tid = threadID else {
-                        continuation.yield(.error("Codex thread not initialized"))
-                        continuation.finish()
-                        return
-                    }
-
-                    // Send turn
-                    let turnID = await session.getNextID()
-                    await session.setPending(continuation)
-                    await session.write("turn/start", id: turnID, params: [
-                        "threadId": tid,
-                        "input": [["type": "text", "text": prompt]]
-                    ])
-
-                    continuation.yield(.initialized(sessionID: tid, model: model))
-
+                    try await self.run(
+                        prompt: prompt,
+                        model: model,
+                        workingDirectory: workingDirectory,
+                        continuation: continuation
+                    )
                 } catch {
                     continuation.yield(.error(error.localizedDescription))
-                    continuation.finish()
+                    continuation.finish(throwing: error)
                 }
             }
         }
     }
 
     public func cancel() async {
-        await session.terminate()
+        await holder.terminate()
     }
-
-    // MARK: - Server Lifecycle
 
     private static func findCodex() -> URL {
         for path in ["/opt/homebrew/bin/codex", "/usr/local/bin/codex", "\(NSHomeDirectory())/.local/bin/codex"] {
@@ -123,25 +54,25 @@ public final class CodexProvider: AIProvider, Sendable {
         return URL(fileURLWithPath: "/opt/homebrew/bin/codex")
     }
 
-    private func startServer(workingDirectory: URL?, systemPrompt: String?) async throws {
+    private func run(
+        prompt: String,
+        model: String,
+        workingDirectory: URL?,
+        continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
+    ) async throws {
         let process = Process()
-        let stdinPipe = Pipe()
-        let stdoutPipe = Pipe()
+        let stdout = Pipe()
+        let stderr = Pipe()
 
         process.executableURL = Self.findCodex()
-        process.arguments = ["app-server"]
-        process.standardInput = stdinPipe
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-
-        // Log stderr for debugging
-        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            if !data.isEmpty, let text = String(data: data, encoding: .utf8) {
-                print("[Codex stderr] \(text)")
-            }
-        }
+        process.arguments = [
+            "exec",
+            "-m", model,
+            "--sandbox", "danger-full-access",
+            prompt
+        ]
+        process.standardOutput = stdout
+        process.standardError = stderr
 
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = ["/opt/homebrew/bin", "/usr/local/bin", "\(NSHomeDirectory())/.local/bin", env["PATH"] ?? ""].joined(separator: ":")
@@ -151,149 +82,58 @@ public final class CodexProvider: AIProvider, Sendable {
             process.currentDirectoryURL = workingDirectory
         }
 
-        let writer = stdinPipe.fileHandleForWriting
-        let reader = stdoutPipe.fileHandleForReading
+        await holder.set(process)
 
-        await session.setProcess(process, writer: writer, reader: reader)
+        do {
+            try process.run()
+        } catch {
+            continuation.yield(.error("Failed to start codex: \(error.localizedDescription)"))
+            continuation.finish()
+            return
+        }
 
-        try process.run()
+        continuation.yield(.initialized(sessionID: "", model: model))
 
-        // Initialize
-        await session.write("initialize", id: 0, params: [
-            "clientInfo": ["name": "AgentFlow", "version": "1.0"]
-        ])
+        let handle = stdout.fileHandleForReading
 
-        // Start reading responses
-        let sessionRef = session
-        let sysPrompt = systemPrompt
+        await withCheckedContinuation { (outerCont: CheckedContinuation<Void, Never>) in
+            nonisolated(unsafe) var gotOutput = false
 
-        // Use a dispatch-based handler to avoid Sendable issues
-        nonisolated(unsafe) var pendingCont: AsyncThrowingStream<StreamEvent, Error>.Continuation?
-
-        reader.readabilityHandler = { handle in
-            let data = handle.availableData
-            guard !data.isEmpty else {
-                handle.readabilityHandler = nil
-                return
-            }
-
-            guard let text = String(data: data, encoding: .utf8) else { return }
-
-            for line in text.components(separatedBy: "\n") where !line.isEmpty {
-                guard let lineData = line.data(using: .utf8),
-                      let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
-                else { continue }
-
-                // Response to initialize (id: 0)
-                if let respID = json["id"] as? Int, respID == 0 {
-                    var threadParams: [String: Any] = [
-                        "approvalPolicy": "never",
-                        "sandbox": "workspace-write",
-                    ]
-                    if let sp = sysPrompt, !sp.isEmpty {
-                        threadParams["developerInstructions"] = sp
-                    }
-                    let msg: [String: Any] = ["jsonrpc": "2.0", "method": "thread/start", "id": 1, "params": threadParams]
-                    if let d = try? JSONSerialization.data(withJSONObject: msg),
-                       var s = String(data: d, encoding: .utf8) {
-                        s += "\n"
-                        writer.write(s.data(using: .utf8)!)
-                    }
+            handle.readabilityHandler = { fileHandle in
+                let data = fileHandle.availableData
+                guard !data.isEmpty else {
+                    fileHandle.readabilityHandler = nil
+                    continuation.yield(.done(stopReason: "end_turn"))
+                    continuation.finish()
+                    outerCont.resume()
+                    return
                 }
 
-                // Response to thread/start (id: 1)
-                if let respID = json["id"] as? Int, respID == 1,
-                   let result = json["result"] as? [String: Any],
-                   let thread = result["thread"] as? [String: Any],
-                   let tid = thread["id"] as? String {
-                    Task { await sessionRef.setThreadID(tid) }
-                }
-
-                // Notifications
-                if let method = json["method"] as? String {
-                    let params = json["params"] as? [String: Any] ?? [:]
-
-                    switch method {
-                    case "item/agentMessage/delta":
-                        if let delta = params["delta"] as? String {
-                            pendingCont?.yield(.textDelta(delta))
-                        }
-                    case "turn/completed":
-                        pendingCont?.yield(.done(stopReason: "end_turn"))
-                        pendingCont?.finish()
-                        pendingCont = nil
-                    case "thread/tokenUsage/updated":
-                        if let usage = params["tokenUsage"] as? [String: Any],
-                           let total = usage["total"] as? [String: Any] {
-                            pendingCont?.yield(.usageTotal(
-                                inputTokens: total["inputTokens"] as? Int ?? 0,
-                                outputTokens: total["outputTokens"] as? Int ?? 0
-                            ))
-                        }
-                    case "item/started":
-                        if let item = params["item"] as? [String: Any],
-                           let type = item["type"] as? String {
-                            if type == "toolCall" || type == "commandExecution" {
-                                let name = item["name"] as? String ?? item["command"] as? String ?? type
-                                pendingCont?.yield(.toolUse(id: item["id"] as? String ?? "", name: name, input: ""))
-                            }
-                        }
-                    default:
-                        break
+                if let text = String(data: data, encoding: .utf8) {
+                    if !gotOutput {
+                        gotOutput = true
                     }
-                }
-
-                // Handle SERVER REQUESTS (need a response) — auto-approve
-                if let reqID = json["id"], let method = json["method"] as? String {
-                    let approvalMethods = [
-                        "item/commandExecution/requestApproval",
-                        "item/fileChange/requestApproval",
-                        "item/permissions/requestApproval",
-                        "applyPatchApproval",
-                        "execCommandApproval",
-                        "item/tool/call",
-                    ]
-
-                    if approvalMethods.contains(method) {
-                        // Auto-approve by sending a response
-                        let response: [String: Any] = [
-                            "jsonrpc": "2.0",
-                            "id": reqID,
-                            "result": ["approved": true, "behavior": "allow"]
-                        ]
-                        if let d = try? JSONSerialization.data(withJSONObject: response),
-                           var s = String(data: d, encoding: .utf8) {
-                            s += "\n"
-                            writer.write(s.data(using: .utf8)!)
-                        }
-
-                        // Show in chat
-                        let params = json["params"] as? [String: Any] ?? [:]
-                        let desc = params["command"] as? String ?? params["path"] as? String ?? method
-                        pendingCont?.yield(.toolUse(id: "", name: "Approved", input: desc))
-                    }
-                }
-
-                // Errors
-                if let error = json["error"] as? [String: Any] {
-                    pendingCont?.yield(.error(error["message"] as? String ?? "Unknown error"))
+                    continuation.yield(.textDelta(text))
                 }
             }
         }
 
-        // Store the pending continuation setter for use in sendMessage
-        nonisolated(unsafe) let setCont = { (c: AsyncThrowingStream<StreamEvent, Error>.Continuation?) in
-            pendingCont = c
-        }
-        await session.setPendingSetter(setCont)
+        process.waitUntilExit()
 
-        // Wait for thread to be ready (up to 30 seconds)
-        for _ in 0..<300 {
-            try await Task.sleep(for: .milliseconds(100))
-            let tid = await session.threadID
-            if tid != nil { return }
+        // Check stderr for errors
+        let errData = stderr.fileHandleForReading.readDataToEndOfFile()
+        if let errText = String(data: errData, encoding: .utf8),
+           !errText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // Extract token usage from codex output
+            if errText.contains("tokens used") {
+                // Parse token count if available
+            }
         }
-
-        throw NSError(domain: "CodexProvider", code: 1, userInfo: [NSLocalizedDescriptionKey: "Timeout waiting for Codex thread. Check your Codex login (run 'codex login' in terminal)."])
     }
+}
+
+private actor ProcessHolder {
+    var process: Process?
+    func set(_ p: Process?) { process = p }
+    func terminate() { process?.terminate(); process = nil }
 }

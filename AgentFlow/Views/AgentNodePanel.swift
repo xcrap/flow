@@ -394,7 +394,7 @@ struct AgentNodePanel: View {
 
     private var usagePercent: Double {
         guard contextLimit > 0 else { return 0 }
-        return Double(totalTokens) / Double(contextLimit) * 100
+        return min(100, Double(totalTokens) / Double(contextLimit) * 100)
     }
 
     private var contextBar: some View {
