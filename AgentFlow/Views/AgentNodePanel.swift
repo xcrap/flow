@@ -6,6 +6,7 @@ import AFCanvas
 struct AgentNodePanel: View {
     let node: WorkflowNode
     let isSelected: Bool
+    let isTitleHovered: Bool
     @Bindable var conversation: ConversationState
     var onSend: (String) -> Void
     var onModelChange: (String) -> Void
@@ -19,7 +20,6 @@ struct AgentNodePanel: View {
     @State private var selectedModel: String
     @State private var selectedEffort: String
     @State private var showSettings = false
-    @State private var isTitleHovered = false
     @State private var systemPromptText: String
     @State private var permissionMode: String
     @FocusState private var inputFocused: Bool
@@ -39,13 +39,14 @@ struct AgentNodePanel: View {
         ("max", "Max"),
     ]
 
-    init(node: WorkflowNode, isSelected: Bool, conversation: ConversationState,
+    init(node: WorkflowNode, isSelected: Bool, isTitleHovered: Bool = false, conversation: ConversationState,
          onSend: @escaping (String) -> Void, onModelChange: @escaping (String) -> Void,
          onEffortChange: @escaping (String) -> Void, onCancel: @escaping () -> Void,
          onSystemPromptChange: @escaping (String) -> Void, onPermissionModeChange: @escaping (String) -> Void,
          onDelete: @escaping () -> Void) {
         self.node = node
         self.isSelected = isSelected
+        self.isTitleHovered = isTitleHovered
         self.conversation = conversation
         self.onSend = onSend
         self.onModelChange = onModelChange
@@ -184,7 +185,6 @@ struct AgentNodePanel: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(isTitleHovered ? Color(nsColor: .controlBackgroundColor).opacity(0.8) : Color(nsColor: .controlBackgroundColor).opacity(0.4))
-        .onHover { isTitleHovered = $0 }
     }
 
     // MARK: - Messages

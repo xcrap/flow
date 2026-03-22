@@ -4,11 +4,11 @@ import AFCore
 public struct ProjectCanvasView<NodeContent: View>: View {
     @Bindable var projectState: ProjectState
     @State private var panStart: CGPoint?
-    let nodeContent: (WorkflowNode, Bool) -> NodeContent
+    let nodeContent: (WorkflowNode, Bool, Bool) -> NodeContent
 
     public init(
         projectState: ProjectState,
-        @ViewBuilder nodeContent: @escaping (WorkflowNode, Bool) -> NodeContent
+        @ViewBuilder nodeContent: @escaping (WorkflowNode, Bool, Bool) -> NodeContent
     ) {
         self.projectState = projectState
         self.nodeContent = nodeContent
@@ -22,8 +22,8 @@ public struct ProjectCanvasView<NodeContent: View>: View {
                 CanvasNodeLayer(
                     projectState: projectState,
                     viewportSize: geometry.size,
-                    nodeContent: { node, isSelected in
-                        AnyView(nodeContent(node, isSelected))
+                    nodeContent: { node, isSelected, isTitleHovered in
+                        AnyView(nodeContent(node, isSelected, isTitleHovered))
                     }
                 )
             }

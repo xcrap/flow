@@ -4,7 +4,8 @@ import AFCore
 public struct CanvasNodeLayer: View {
     @Bindable var projectState: ProjectState
     let viewportSize: CGSize
-    let nodeContent: (WorkflowNode, Bool) -> AnyView
+    let nodeContent: (WorkflowNode, Bool, Bool) -> AnyView
+    @State private var hoveredNodeID: UUID?
 
     private let viewportBuffer: Double = 500
 
@@ -19,7 +20,7 @@ public struct CanvasNodeLayer: View {
     public init(
         projectState: ProjectState,
         viewportSize: CGSize,
-        @ViewBuilder nodeContent: @escaping (WorkflowNode, Bool) -> AnyView
+        @ViewBuilder nodeContent: @escaping (WorkflowNode, Bool, Bool) -> AnyView
     ) {
         self.projectState = projectState
         self.viewportSize = viewportSize
@@ -35,21 +36,40 @@ public struct CanvasNodeLayer: View {
     @ViewBuilder
     private func nodePanel(_ node: WorkflowNode) -> some View {
         let isSelected = projectState.selectedNodeIDs.contains(node.id)
+        let isTitleHovered = hoveredNodeID == node.id
 
-        nodeContent(node, isSelected)
+        nodeContent(node, isSelected, isTitleHovered)
             .overlay(alignment: .topLeading) {
-                // Drag handle covers title area (left 60%), right side has pickers
                 Color.clear
                     .frame(width: max(0, node.position.width * 0.55), height: 40)
                     .contentShape(Rectangle())
+                    .onHover { hovering in
+                        hoveredNodeID = hovering ? node.id : nil
+                    }
                     .gesture(nodeDragGesture(for: node.id))
             }
-            .overlay(alignment: .bottomTrailing) {
-                // Invisible resize area at bottom-right corner
+            .overlay(alignment: .trailing) {
+                // Right edge resize
                 Color.clear
-                    .frame(width: 16, height: 16)
+                    .frame(width: 6, height: node.position.height * 0.6)
+                    .contentShape(Rectangle())
+                    .cursor(.resizeLeftRight)
+                    .gesture(edgeResizeGesture(for: node.id, edge: .right))
+            }
+            .overlay(alignment: .bottom) {
+                // Bottom edge resize
+                Color.clear
+                    .frame(width: node.position.width * 0.6, height: 6)
                     .contentShape(Rectangle())
                     .cursor(.resizeUpDown)
+                    .gesture(edgeResizeGesture(for: node.id, edge: .bottom))
+            }
+            .overlay(alignment: .bottomTrailing) {
+                // Corner resize
+                Color.clear
+                    .frame(width: 14, height: 14)
+                    .contentShape(Rectangle())
+                    .cursor(.crosshair)
                     .gesture(resizeGesture(for: node.id))
             }
             .scaleEffect(projectState.canvasState.zoom, anchor: .center)
@@ -127,6 +147,55 @@ public struct CanvasNodeLayer: View {
 
                     projectState.nodes[nodeID]?.position.width = newWidth
                     projectState.nodes[nodeID]?.position.height = newHeight
+                }
+            }
+            .onEnded { _ in
+                projectState.canvasState.draggedNodeID = nil
+                projectState.clearDragStartPositions()
+            }
+    }
+
+    enum ResizeEdge { case right, bottom }
+
+    private func edgeResizeGesture(for nodeID: UUID, edge: ResizeEdge) -> some Gesture {
+        DragGesture(coordinateSpace: .named("canvas"))
+            .onChanged { value in
+                let zoom = projectState.canvasState.zoom
+                let dw = value.translation.width / zoom
+                let dh = value.translation.height / zoom
+
+                if projectState.canvasState.draggedNodeID != nodeID {
+                    projectState.canvasState.draggedNodeID = nodeID
+                    if let node = projectState.nodes[nodeID] {
+                        projectState.dragStartPositions[nodeID] = CGPoint(
+                            x: node.position.width,
+                            y: node.position.height
+                        )
+                        let centerKey = UUID(uuid: (nodeID.uuid.0 ^ 0xFF, nodeID.uuid.1, nodeID.uuid.2, nodeID.uuid.3, nodeID.uuid.4, nodeID.uuid.5, nodeID.uuid.6, nodeID.uuid.7, nodeID.uuid.8, nodeID.uuid.9, nodeID.uuid.10, nodeID.uuid.11, nodeID.uuid.12, nodeID.uuid.13, nodeID.uuid.14, nodeID.uuid.15))
+                        projectState.dragStartPositions[centerKey] = CGPoint(
+                            x: node.position.x,
+                            y: node.position.y
+                        )
+                    }
+                }
+
+                if let startSize = projectState.dragStartPositions[nodeID] {
+                    let centerKey = UUID(uuid: (nodeID.uuid.0 ^ 0xFF, nodeID.uuid.1, nodeID.uuid.2, nodeID.uuid.3, nodeID.uuid.4, nodeID.uuid.5, nodeID.uuid.6, nodeID.uuid.7, nodeID.uuid.8, nodeID.uuid.9, nodeID.uuid.10, nodeID.uuid.11, nodeID.uuid.12, nodeID.uuid.13, nodeID.uuid.14, nodeID.uuid.15))
+
+                    switch edge {
+                    case .right:
+                        let newWidth = max(280, startSize.x + dw)
+                        projectState.nodes[nodeID]?.position.width = newWidth
+                        if let startCenter = projectState.dragStartPositions[centerKey] {
+                            projectState.nodes[nodeID]?.position.x = startCenter.x + (newWidth - startSize.x) / 2
+                        }
+                    case .bottom:
+                        let newHeight = max(200, startSize.y + dh)
+                        projectState.nodes[nodeID]?.position.height = newHeight
+                        if let startCenter = projectState.dragStartPositions[centerKey] {
+                            projectState.nodes[nodeID]?.position.y = startCenter.y + (newHeight - startSize.y) / 2
+                        }
+                    }
                 }
             }
             .onEnded { _ in

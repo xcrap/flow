@@ -87,8 +87,8 @@ struct ProjectEditorView: View {
     @ViewBuilder
     private func canvasArea(project: ProjectState) -> some View {
         ZStack(alignment: .bottomTrailing) {
-            ProjectCanvasView(projectState: project) { node, isSelected in
-                nodePanel(node: node, isSelected: isSelected, project: project)
+            ProjectCanvasView(projectState: project) { node, isSelected, isTitleHovered in
+                nodePanel(node: node, isSelected: isSelected, isTitleHovered: isTitleHovered, project: project)
             }
 
             // Reset zoom button
@@ -110,13 +110,14 @@ struct ProjectEditorView: View {
     // MARK: - Node Panels
 
     @ViewBuilder
-    private func nodePanel(node: WorkflowNode, isSelected: Bool, project: ProjectState) -> some View {
+    private func nodePanel(node: WorkflowNode, isSelected: Bool, isTitleHovered: Bool, project: ProjectState) -> some View {
         switch node.kind {
         case .agent:
             if let conversation = conversations[node.id] {
                 AgentNodePanel(
                     node: node,
                     isSelected: isSelected,
+                    isTitleHovered: isTitleHovered,
                     conversation: conversation,
                     onSend: { text in
                         sendMessage(text, toNode: node.id, in: project)
@@ -148,6 +149,7 @@ struct ProjectEditorView: View {
                 TerminalNodePanel(
                     node: node,
                     isSelected: isSelected,
+                    isTitleHovered: isTitleHovered,
                     session: session,
                     onDelete: {
                         project.removeNode(node.id)
@@ -204,9 +206,9 @@ struct ProjectEditorView: View {
             permissionMode: permMode,
             workingDirectory: workingDir,
             resumeSessionID: sessionID,
-            onComplete: { [weak self] in
-                Task { @MainActor in
-                    self?.saveConversations()
+            onComplete: {
+                Task { @MainActor [saveConversations] in
+                    saveConversations()
                 }
             }
         )

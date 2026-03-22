@@ -6,11 +6,11 @@ import AFCanvas
 struct TerminalNodePanel: View {
     let node: WorkflowNode
     let isSelected: Bool
+    let isTitleHovered: Bool
     @Bindable var session: TerminalSession
     var onDelete: () -> Void
 
     @State private var inputText = ""
-    @State private var isTitleHovered = false
     @FocusState private var inputFocused: Bool
 
     var body: some View {
@@ -90,7 +90,6 @@ struct TerminalNodePanel: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(isTitleHovered ? Color(nsColor: .controlBackgroundColor).opacity(0.8) : Color(nsColor: .controlBackgroundColor).opacity(0.4))
-        .onHover { isTitleHovered = $0 }
     }
 
     // MARK: - Output
