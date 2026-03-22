@@ -6,25 +6,41 @@ import AFCanvas
 struct ProjectEditorView: View {
     @Environment(AppState.self) private var appState
     @Environment(ProviderRegistry.self) private var providerRegistry
+    @Environment(\.scenePhase) private var scenePhase
     @Binding var sidebarVisible: Bool
     @Binding var showCommandPalette: Bool
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showNodePicker = false
-    @State private var conversations: [UUID: ConversationState] = [:]
-    @State private var terminalSessions: [UUID: TerminalSession] = [:]
+    @State private var conversationsByProject: [UUID: [UUID: ConversationState]] = [:]
+    @State private var terminalSessionsByProject: [UUID: [UUID: TerminalSession]] = [:]
     @State private var conversationService: ConversationService?
     @State private var gitService = GitService()
     @State private var showCommitSheet = false
     @State private var commitMessage = ""
+    @State private var canvasViewportSize: CGSize = CGSize(width: 900, height: 700)
 
     private var activeProject: ProjectState? {
         appState.activeProject
     }
 
+    private var activeConversations: [UUID: ConversationState] {
+        guard let activeProject else { return [:] }
+        return conversationsByProject[activeProject.project.id] ?? [:]
+    }
+
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            ProjectSidebarView()
-                .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 300)
+            ProjectSidebarView(
+                activeProject: activeProject,
+                conversations: activeConversations,
+                onSelectAgent: { nodeID in
+                    if let project = activeProject {
+                        focusAgentNode(nodeID, in: project)
+                    }
+                },
+                onDeleteProject: deleteProject
+            )
+            .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 340)
         } detail: {
             ZStack {
                 if let project = activeProject {
@@ -51,16 +67,16 @@ struct ProjectEditorView: View {
         .onAppear {
             setupProviders()
             if let project = activeProject {
-                // Set sidebar selection to match active project
                 appState.sidebarSelection = .project(project.project.id)
                 loadConversations(for: project)
                 ensureSessionsExist(for: project)
                 gitService.configure(rootPath: project.project.rootPath)
             }
         }
-        .onChange(of: appState.activeProjectID) {
-            // Save before switching
-            saveConversations()
+        .onChange(of: appState.activeProjectID) { previousProjectID, _ in
+            if let previousProjectID {
+                saveConversations(for: previousProjectID)
+            }
             appState.scheduleSave()
 
             if let project = activeProject {
@@ -76,6 +92,14 @@ struct ProjectEditorView: View {
                 }
             }
         }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase != .active {
+                flushAllPersistence()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            flushAllPersistence()
+        }
         .sheet(isPresented: $showCommitSheet) {
             commitSheet
         }
@@ -86,6 +110,9 @@ struct ProjectEditorView: View {
         }
         .onChange(of: columnVisibility) {
             sidebarVisible = columnVisibility != .detailOnly
+        }
+        .onDisappear {
+            flushAllPersistence()
         }
     }
 
@@ -111,6 +138,12 @@ struct ProjectEditorView: View {
                     nodePanel(node: node, isSelected: isSelected, isTitleHovered: isTitleHovered, project: project)
                 }
                 .id(project.project.id) // Force full recreation on project switch
+                .onAppear {
+                    canvasViewportSize = geo.size
+                }
+                .onChange(of: geo.size) { _, newSize in
+                    canvasViewportSize = newSize
+                }
 
                 HStack {
                     Spacer()
@@ -274,80 +307,103 @@ struct ProjectEditorView: View {
     private func nodePanel(node: WorkflowNode, isSelected: Bool, isTitleHovered: Bool, project: ProjectState) -> some View {
         switch node.kind {
         case .agent:
-            let conversation = conversationFor(node.id)
+            let projectID = project.project.id
+            let conversation = conversationFor(node.id, in: projectID)
             AgentNodePanel(
                     node: node,
                     isSelected: isSelected,
                     isTitleHovered: isTitleHovered,
                     conversation: conversation,
+                    onProviderChange: { providerID in
+                        let previousProviderID = project.nodes[node.id]?.configuration.providerID
+                        project.nodes[node.id]?.configuration.providerID = providerID
+                        if previousProviderID != providerID {
+                            conversation.sessionID = nil
+                            conversation.reportedContextWindow = nil
+                        }
+                        project.onChange?()
+                    },
                     onSend: { text in
                         sendMessage(text, toNode: node.id, in: project)
                     },
                     onModelChange: { model in
                         project.nodes[node.id]?.configuration.modelID = model
-                        // Auto-detect provider from model
-                        let codexModels = ["gpt-5.4", "o3", "o4-mini"]
-                        project.nodes[node.id]?.configuration.providerID = codexModels.contains(model) ? "codex" : "claude"
+                        conversation.reportedContextWindow = nil
+                        project.onChange?()
                     },
                     onEffortChange: { effort in
                         project.nodes[node.id]?.configuration.effort = effort
+                        project.onChange?()
                     },
                     onCancel: {
                         conversationService?.cancelStreaming(for: node.id)
                     },
+                    onClearConversation: {
+                        clearConversation(nodeID: node.id, in: projectID)
+                    },
                     onSystemPromptChange: { prompt in
+                        let previousPrompt = project.nodes[node.id]?.configuration.systemPrompt
                         project.nodes[node.id]?.configuration.systemPrompt = prompt
+                        if previousPrompt != prompt {
+                            conversation.sessionID = nil
+                        }
+                        project.onChange?()
                     },
                     onPermissionModeChange: { mode in
                         project.nodes[node.id]?.configuration.triggerType = mode
+                        project.onChange?()
                     },
                     onDelete: {
                         project.removeNode(node.id)
-                        conversations.removeValue(forKey: node.id)
+                        conversationsByProject[projectID]?.removeValue(forKey: node.id)
+                        saveConversations(for: projectID)
                     }
                 )
 
         case .terminal:
-            let session = terminalSessionFor(node.id, rootPath: project.project.rootPath)
+            let projectID = project.project.id
+            let session = terminalSessionFor(node.id, in: projectID, rootPath: project.project.rootPath)
             TerminalNodePanel(
                 node: node,
                 isSelected: isSelected,
                 isTitleHovered: isTitleHovered,
                 session: session,
-                onSave: { [self] in saveConversations() },
+                onSave: { [self] in saveConversations(for: projectID) },
                 onDelete: {
                     project.removeNode(node.id)
-                    terminalSessions.removeValue(forKey: node.id)
+                    terminalSessionsByProject[projectID]?.removeValue(forKey: node.id)
+                    saveConversations(for: projectID)
                 }
                 )
         }
     }
 
-    private func conversationFor(_ nodeID: UUID) -> ConversationState {
-        if let existing = conversations[nodeID] { return existing }
+    private func conversationFor(_ nodeID: UUID, in projectID: UUID) -> ConversationState {
+        if let existing = conversationsByProject[projectID]?[nodeID] { return existing }
         let conv = ConversationState(nodeID: nodeID)
-        conversations[nodeID] = conv
+        conversationsByProject[projectID, default: [:]][nodeID] = conv
         return conv
     }
 
-    private func terminalSessionFor(_ nodeID: UUID, rootPath: String) -> TerminalSession {
-        if let existing = terminalSessions[nodeID] { return existing }
+    private func terminalSessionFor(_ nodeID: UUID, in projectID: UUID, rootPath: String) -> TerminalSession {
+        if let existing = terminalSessionsByProject[projectID]?[nodeID] { return existing }
         let session = TerminalSession(id: nodeID, currentDirectory: rootPath)
-        terminalSessions[nodeID] = session
+        terminalSessionsByProject[projectID, default: [:]][nodeID] = session
         return session
     }
 
     private func ensureSessionsExist(for project: ProjectState) {
+        let projectID = project.project.id
         let cwd = project.project.rootPath
         for (id, node) in project.nodes {
             switch node.kind {
             case .agent:
-                if conversations[id] == nil {
-                    conversations[id] = ConversationState(nodeID: id)
+                if conversationsByProject[projectID]?[id] == nil {
+                    conversationsByProject[projectID, default: [:]][id] = ConversationState(nodeID: id)
                 }
             case .terminal:
-                if terminalSessions[id] == nil {
-                    terminalSessions[id] = TerminalSession(id: id, currentDirectory: cwd)
+                if terminalSessionsByProject[projectID]?[id] == nil {
+                    terminalSessionsByProject[projectID, default: [:]][id] = TerminalSession(id: id, currentDirectory: cwd)
                 }
             }
         }
@@ -361,7 +417,8 @@ struct ProjectEditorView: View {
               let service = conversationService
         else { return }
 
-        guard let conversation = conversations[nodeID] else { return }
+        let projectID = project.project.id
+        guard let conversation = conversationsByProject[projectID]?[nodeID] else { return }
         let providerID = node.configuration.providerID ?? "claude"
         let model = node.configuration.modelID ?? "sonnet"
         let effort = node.configuration.effort ?? "high"
@@ -373,9 +430,6 @@ struct ProjectEditorView: View {
         // Use --resume if we have a session ID from a previous conversation
         let sessionID = conversation.sessionID
 
-        // Save immediately so user message is persisted
-        saveConversations()
-
         service.send(
             prompt: text,
             to: conversation,
@@ -386,30 +440,96 @@ struct ProjectEditorView: View {
             permissionMode: permMode,
             workingDirectory: workingDir,
             resumeSessionID: sessionID,
-            onComplete: { [saveConversations] in
+            onComplete: { [projectID] in
                 Task { @MainActor in
-                    saveConversations()
+                    self.saveConversations(for: projectID)
                 }
             }
         )
+        saveConversations(for: projectID)
     }
 
     // MARK: - Conversation Persistence
 
     private func loadConversations(for project: ProjectState) {
-        let loadedConvs = ConversationPersistence.loadConversations(for: project.project.id)
-        for (id, conv) in loadedConvs {
-            conversations[id] = conv
+        let projectID = project.project.id
+
+        if conversationsByProject[projectID] == nil {
+            conversationsByProject[projectID] = ConversationPersistence.loadConversations(for: projectID)
         }
-        let loadedTerms = ConversationPersistence.loadTerminals(for: project.project.id, rootPath: project.project.rootPath)
-        for (id, session) in loadedTerms {
-            terminalSessions[id] = session
+
+        if terminalSessionsByProject[projectID] == nil {
+            terminalSessionsByProject[projectID] = ConversationPersistence.loadTerminals(
+                for: projectID,
+                rootPath: project.project.rootPath
+            )
         }
     }
 
-    private func saveConversations() {
-        guard let project = activeProject else { return }
-        ConversationPersistence.save(conversations: conversations, terminals: terminalSessions, for: project.project.id)
+    private func saveConversations(for projectID: UUID, flushProjectState: Bool = true) {
+        guard let project = appState.openProjects.first(where: { $0.project.id == projectID }) else { return }
+        if flushProjectState {
+            appState.flushSaveNow()
+        }
+        ConversationPersistence.save(
+            conversations: conversationsByProject[projectID] ?? [:],
+            terminals: terminalSessionsByProject[projectID] ?? [:],
+            for: project.project.id
+        )
+    }
+
+    private func flushAllPersistence() {
+        appState.flushSaveNow()
+
+        let loadedProjectIDs = Set(conversationsByProject.keys).union(terminalSessionsByProject.keys)
+        for projectID in loadedProjectIDs {
+            saveConversations(for: projectID, flushProjectState: false)
+        }
+    }
+
+    private func clearConversation(nodeID: UUID, in projectID: UUID) {
+        conversationService?.clearPendingRequests(for: nodeID)
+        conversationService?.cancelStreaming(for: nodeID)
+        conversationFor(nodeID, in: projectID).resetConversation()
+        saveConversations(for: projectID)
+    }
+
+    private func centerCanvas(on node: WorkflowNode, in project: ProjectState, animated: Bool = true) {
+        let updateCanvas = {
+            project.canvasState.center(on: node.position.point, in: canvasViewportSize)
+        }
+
+        if animated {
+            withAnimation(.spring(duration: 0.35)) {
+                updateCanvas()
+            }
+        } else {
+            updateCanvas()
+        }
+
+        project.onChange?()
+    }
+
+    private func focusAgentNode(_ nodeID: UUID, in project: ProjectState) {
+        guard let node = project.nodes[nodeID] else { return }
+        project.selectedNodeIDs = [nodeID]
+        project.selectedConnectionIDs.removeAll()
+        project.bringToFront(nodeID)
+        centerCanvas(on: node, in: project)
+    }
+
+    private func deleteProject(_ projectID: UUID) {
+        if let nodeIDs = conversationsByProject[projectID]?.keys {
+            for nodeID in nodeIDs {
+                conversationService?.clearPendingRequests(for: nodeID)
+                conversationService?.cancelStreaming(for: nodeID)
+            }
+        }
+
+        conversationsByProject.removeValue(forKey: projectID)
+        terminalSessionsByProject.removeValue(forKey: projectID)
+        ConversationPersistence.delete(for: projectID)
+        appState.deleteProject(projectID)
     }
 
     // MARK: - Node Positioning
@@ -457,13 +577,7 @@ struct ProjectEditorView: View {
                     if let project = activeProject {
                         let position = nextNodePosition(in: project, kind: kind)
                         let node = project.addNode(kind: kind, title: title, at: position)
-                        // Center canvas on new node
-                        withAnimation(.spring(duration: 0.3)) {
-                            project.canvasState.offset = CGPoint(
-                                x: -node.position.x * project.canvasState.zoom + 400,
-                                y: -node.position.y * project.canvasState.zoom + 350
-                            )
-                        }
+                        centerCanvas(on: node, in: project)
                     }
                     showNodePicker = false
                 }

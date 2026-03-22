@@ -1,11 +1,8 @@
 import Foundation
 import AFCore
 
-private actor ProcessHolder {
-    var process: Process?
-
-    func set(_ p: Process?) { process = p }
-    func get() -> Process? { process }
+private final class ClaudeLineBuffer: @unchecked Sendable {
+    var value = ""
 }
 
 public final class ClaudeCodeProvider: AIProvider, Sendable {
@@ -17,11 +14,9 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         AIModel(id: "opus", name: "Opus (latest)", contextWindow: 1_000_000),
         AIModel(id: "haiku", name: "Haiku (latest)", contextWindow: 200_000),
         AIModel(id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: 200_000),
-        AIModel(id: "claude-opus-4-6", name: "Claude Opus 4", contextWindow: 1_000_000),
+        AIModel(id: "claude-opus-4-6", name: "Claude Opus 4.6", contextWindow: 1_000_000),
         AIModel(id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", contextWindow: 200_000),
     ]
-
-    private let holder = ProcessHolder()
 
     public init() {}
 
@@ -34,9 +29,11 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         permissionMode: String?,
         workingDirectory: URL?,
         resumeSessionID: String?
-    ) -> AsyncThrowingStream<StreamEvent, Error> {
-        AsyncThrowingStream { continuation in
-            Task {
+    ) -> ProviderStreamHandle {
+        let process = Process()
+
+        let stream = AsyncThrowingStream<StreamEvent, Error> { continuation in
+            let task = Task {
                 do {
                     try await self.runClaude(
                         prompt: prompt,
@@ -46,24 +43,33 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
                         permissionMode: permissionMode,
                         workingDirectory: workingDirectory,
                         resumeSessionID: resumeSessionID,
+                        process: process,
                         continuation: continuation
                     )
                 } catch {
-                    continuation.yield(.error(error.localizedDescription))
-                    continuation.finish(throwing: error)
+                    if !Task.isCancelled {
+                        continuation.yield(.error(error.localizedDescription))
+                        continuation.finish(throwing: error)
+                    }
                 }
+            }
+
+            continuation.onTermination = { @Sendable _ in
+                task.cancel()
+                if process.isRunning {
+                    process.terminate()
+                }
+            }
+        }
+
+        return ProviderStreamHandle(stream: stream) {
+            if process.isRunning {
+                process.terminate()
             }
         }
     }
 
-    public func cancel() async {
-        await holder.get()?.terminate()
-    }
-
-    // MARK: - Private
-
     private static func findClaude() -> URL {
-        // Check common locations
         let candidates = [
             "\(NSHomeDirectory())/.local/bin/claude",
             "/usr/local/bin/claude",
@@ -74,14 +80,13 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
 
         for path in candidates {
             if path.contains("*") {
-                // Glob expansion
                 let dir = (path as NSString).deletingLastPathComponent
                 let file = (path as NSString).lastPathComponent
                 if let contents = try? FileManager.default.contentsOfDirectory(atPath: dir) {
                     for item in contents {
-                        let full = "\(dir)/\(item)/\(file)"
-                        if FileManager.default.isExecutableFile(atPath: full) {
-                            return URL(fileURLWithPath: full)
+                        let fullPath = "\(dir)/\(item)/\(file)"
+                        if FileManager.default.isExecutableFile(atPath: fullPath) {
+                            return URL(fileURLWithPath: fullPath)
                         }
                     }
                 }
@@ -90,7 +95,6 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
             }
         }
 
-        // Fallback: try to find via shell
         let shell = Process()
         let pipe = Pipe()
         shell.executableURL = URL(fileURLWithPath: "/bin/zsh")
@@ -99,6 +103,7 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         shell.standardError = FileHandle.nullDevice
         try? shell.run()
         shell.waitUntilExit()
+
         if let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines),
            !output.isEmpty
@@ -117,45 +122,51 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         permissionMode: String?,
         workingDirectory: URL?,
         resumeSessionID: String?,
+        process: Process,
         continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
     ) async throws {
         let claudeURL = Self.findClaude()
-        let process = Process()
         let stdout = Pipe()
         let stderr = Pipe()
 
         if claudeURL.path == "/usr/bin/env" {
             process.executableURL = claudeURL
             var args = ["claude"]
-            args += Self.buildArgs(model: model, effort: effort, systemPrompt: systemPrompt, permissionMode: permissionMode, prompt: prompt, resumeSessionID: resumeSessionID)
+            args += Self.buildArgs(
+                model: model,
+                effort: effort,
+                systemPrompt: systemPrompt,
+                permissionMode: permissionMode,
+                prompt: prompt,
+                resumeSessionID: resumeSessionID
+            )
             process.arguments = args
         } else {
             process.executableURL = claudeURL
-            process.arguments = Self.buildArgs(model: model, effort: effort, systemPrompt: systemPrompt, prompt: prompt, resumeSessionID: resumeSessionID)
+            process.arguments = Self.buildArgs(
+                model: model,
+                effort: effort,
+                systemPrompt: systemPrompt,
+                permissionMode: permissionMode,
+                prompt: prompt,
+                resumeSessionID: resumeSessionID
+            )
         }
 
-        // Ensure PATH includes common locations
-        var env = ProcessInfo.processInfo.environment
+        var environment = ProcessInfo.processInfo.environment
         let extraPaths = [
             "\(NSHomeDirectory())/.local/bin",
             "/usr/local/bin",
             "/opt/homebrew/bin",
         ]
-        let currentPath = env["PATH"] ?? "/usr/bin:/bin"
-        env["PATH"] = (extraPaths + [currentPath]).joined(separator: ":")
-        process.environment = env
-
+        let currentPath = environment["PATH"] ?? "/usr/bin:/bin"
+        environment["PATH"] = (extraPaths + [currentPath]).joined(separator: ":")
+        process.environment = environment
         process.standardOutput = stdout
         process.standardError = stderr
 
         if let workingDirectory {
             process.currentDirectoryURL = workingDirectory
-        }
-
-        await holder.set(process)
-
-        process.terminationHandler = { [holder] _ in
-            Task { await holder.set(nil) }
         }
 
         do {
@@ -166,25 +177,34 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
             return
         }
 
-        let handle = stdout.fileHandleForReading
+        continuation.yield(.lifecycle(.turnStarted(turnID: nil)))
 
-        await withCheckedContinuation { (outerCont: CheckedContinuation<Void, Never>) in
+        let handle = stdout.fileHandleForReading
+        let buffer = ClaudeLineBuffer()
+
+        await withCheckedContinuation { (outerContinuation: CheckedContinuation<Void, Never>) in
             handle.readabilityHandler = { fileHandle in
                 let data = fileHandle.availableData
                 guard !data.isEmpty else {
+                    if !buffer.value.isEmpty {
+                        Self.parseBufferedLines(buffer.value, continuation: continuation)
+                        buffer.value = ""
+                    }
                     fileHandle.readabilityHandler = nil
                     continuation.yield(.done(stopReason: "end_turn"))
                     continuation.finish()
-                    outerCont.resume()
+                    outerContinuation.resume()
                     return
                 }
 
-                if let text = String(data: data, encoding: .utf8) {
-                    let lines = text.components(separatedBy: "\n")
-                    for line in lines where !line.isEmpty {
-                        if let event = Self.parseStreamEvent(line) {
-                            continuation.yield(event)
-                        }
+                guard let text = String(data: data, encoding: .utf8) else { return }
+                buffer.value += text
+                let lines = buffer.value.components(separatedBy: "\n")
+                buffer.value = lines.last ?? ""
+
+                for line in lines.dropLast() where !line.isEmpty {
+                    if let event = Self.parseStreamEvent(line) {
+                        continuation.yield(event)
                     }
                 }
             }
@@ -192,17 +212,37 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
 
         process.waitUntilExit()
 
-        // Check for errors
+        guard !Task.isCancelled else { return }
+
         if process.terminationStatus != 0 {
-            let errData = stderr.fileHandleForReading.readDataToEndOfFile()
-            let errText = String(data: errData, encoding: .utf8) ?? "Unknown error"
-            if !errText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                continuation.yield(.error("Claude exited with error: \(errText)"))
+            let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
+            let errorText = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+            let trimmedError = errorText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedError.isEmpty {
+                continuation.yield(.error("Claude exited with error: \(trimmedError)"))
             }
         }
     }
 
-    private static func buildArgs(model: String, effort: String?, systemPrompt: String?, permissionMode: String? = nil, prompt: String, resumeSessionID: String? = nil) -> [String] {
+    private static func parseBufferedLines(
+        _ buffer: String,
+        continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
+    ) {
+        for line in buffer.components(separatedBy: "\n") where !line.isEmpty {
+            if let event = parseStreamEvent(line) {
+                continuation.yield(event)
+            }
+        }
+    }
+
+    private static func buildArgs(
+        model: String,
+        effort: String?,
+        systemPrompt: String?,
+        permissionMode: String?,
+        prompt: String,
+        resumeSessionID: String?
+    ) -> [String] {
         var args = [
             "-p",
             "--output-format", "stream-json",
@@ -219,7 +259,10 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
             args += ["--system-prompt", systemPrompt]
         }
 
-        // In -p mode, always skip permissions since interactive approval is impossible
+        if let permissionMode, !permissionMode.isEmpty {
+            args += ["--permission-mode", permissionMode]
+        }
+
         args += ["--dangerously-skip-permissions"]
 
         if let resumeSessionID, !resumeSessionID.isEmpty {
@@ -243,7 +286,6 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
             return .initialized(sessionID: sessionID, model: model)
 
         case "stream_event":
-            // Partial streaming events (token-by-token)
             guard let event = json["event"] as? [String: Any],
                   let eventType = event["type"] as? String
             else { return nil }
@@ -272,7 +314,6 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
             }
 
         case "assistant":
-            // Full message (comes after stream_events, skip text since we got deltas)
             if let message = json["message"] as? [String: Any],
                let content = message["content"] as? [[String: Any]]
             {
@@ -282,13 +323,13 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
                         let id = block["id"] as? String ?? ""
                         let name = block["name"] as? String ?? ""
                         let input: String
-                        if let inputObj = block["input"] {
-                            if let inputData = try? JSONSerialization.data(withJSONObject: inputObj),
-                               let inputStr = String(data: inputData, encoding: .utf8)
+                        if let inputObject = block["input"] {
+                            if let inputData = try? JSONSerialization.data(withJSONObject: inputObject),
+                               let inputString = String(data: inputData, encoding: .utf8)
                             {
-                                input = inputStr
+                                input = inputString
                             } else {
-                                input = "\(inputObj)"
+                                input = "\(inputObject)"
                             }
                         } else {
                             input = "{}"
@@ -302,14 +343,15 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         case "result":
             let cost = json["total_cost_usd"] as? Double
             if let modelUsage = json["modelUsage"] as? [String: Any] {
-                // Extract from modelUsage for accurate token counts
+                var inputTokens = 0
+                var outputTokens = 0
                 for (_, value) in modelUsage {
                     if let modelData = value as? [String: Any] {
-                        let inputTokens = modelData["inputTokens"] as? Int ?? 0
-                        let outputTokens = modelData["outputTokens"] as? Int ?? 0
-                        return .usage(inputTokens: inputTokens, outputTokens: outputTokens, costUSD: cost)
+                        inputTokens += modelData["inputTokens"] as? Int ?? 0
+                        outputTokens += modelData["outputTokens"] as? Int ?? 0
                     }
                 }
+                return .usage(inputTokens: inputTokens, outputTokens: outputTokens, costUSD: cost)
             }
             return .usage(inputTokens: 0, outputTokens: 0, costUSD: cost)
 

@@ -36,8 +36,11 @@ struct TerminalNodePanel: View {
                 )
         }
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .onAppear {
+            restoreInputFocusIfNeeded()
+        }
         .onChange(of: isSelected) {
-            if isSelected { inputFocused = true }
+            restoreInputFocusIfNeeded()
         }
     }
 
@@ -182,5 +185,12 @@ struct TerminalNodePanel: View {
         inputText = ""
         session.execute(command: cmd)
         inputFocused = true
+    }
+
+    private func restoreInputFocusIfNeeded() {
+        guard isSelected else { return }
+        Task { @MainActor in
+            inputFocused = true
+        }
     }
 }

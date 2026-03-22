@@ -27,12 +27,11 @@ public final class ProjectPersistence {
     }
 
     public static func save(_ appState: AppState) {
-        let names = appState.openProjects.map { $0.project.name }
-        print("[Save] \(names.count) projects: \(names.joined(separator: ", "))")
         let persisted = PersistedAppState(
             projects: appState.openProjects.map { state in
                 // Sync canvas state into project model before saving
                 var project = state.project
+                project.updatedAt = Date()
                 project.canvasOffset = CanvasOffset(state.canvasState.offset)
                 project.canvasZoom = state.canvasState.zoom
 
@@ -47,10 +46,7 @@ public final class ProjectPersistence {
         )
 
         do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .prettyPrinted
-            let data = try encoder.encode(persisted)
-
+            let data = try JSONEncoder().encode(persisted)
             try data.write(to: saveURL, options: .atomic)
         } catch {
             print("Failed to save projects: \(error)")
@@ -58,7 +54,6 @@ public final class ProjectPersistence {
     }
 
     public static func load(into appState: AppState) {
-        print("[Load] from \(saveURL.path)")
         guard FileManager.default.fileExists(atPath: saveURL.path) else { return }
 
         do {

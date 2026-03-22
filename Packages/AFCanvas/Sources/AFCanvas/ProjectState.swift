@@ -58,6 +58,7 @@ public final class ProjectState {
     public func bringToFront(_ id: UUID) {
         nodeZOrder.removeAll { $0 == id }
         nodeZOrder.append(id)
+        onChange?()
     }
 
     // MARK: - Connection Operations
@@ -84,12 +85,14 @@ public final class ProjectState {
             targetPortID: targetPort
         )
         connections[connection.id] = connection
+        onChange?()
         return connection
     }
 
     public func removeConnection(_ id: UUID) {
         connections.removeValue(forKey: id)
         selectedConnectionIDs.remove(id)
+        onChange?()
     }
 
     // MARK: - Selection

@@ -15,16 +15,58 @@ struct ConversationView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
+                HStack(spacing: 8) {
+                    let statusColor: Color = switch conversationState.runtimePhase {
+                    case .responding:
+                        .green
+                    case .preparing:
+                        Color(red: 0.88, green: 0.67, blue: 0.22)
+                    case .cancelling:
+                        .orange
+                    case .failed:
+                        .red
+                    case .idle:
+                        Color.white.opacity(0.38)
+                    }
+
+                    ZStack {
+                        Circle()
+                            .fill(statusColor.opacity(conversationState.runtimePhase.isWorking ? 0.22 : 0.12))
+                            .frame(width: 18, height: 18)
+
+                        Circle()
+                            .fill(statusColor)
+                            .frame(width: 9, height: 9)
+                    }
+
+                    Text(conversationState.statusLabel)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(conversationState.runtimePhase.isWorking ? statusColor : .secondary)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.white.opacity(0.04))
+                        .overlay {
+                            Capsule(style: .continuous)
+                                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                        }
+                )
+
                 Image(systemName: node.iconName)
                     .foregroundStyle(.purple)
                 Text(node.title)
                     .font(.headline)
                 Spacer()
 
-                if conversationState.totalCostUSD > 0 {
-                    Text("$\(conversationState.totalCostUSD, specifier: "%.4f")")
-                        .font(.system(size: 11, design: .monospaced))
+                if conversationState.queuedPromptCount > 0 {
+                    Text(conversationState.queuedPromptCount == 1 ? "1 queued" : "\(conversationState.queuedPromptCount) queued")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color(nsColor: .controlBackgroundColor), in: Capsule())
                 }
 
                 if conversationState.isStreaming {
@@ -69,11 +111,53 @@ struct ConversationView: View {
                 }
             }
 
+            if conversationState.queuedPromptCount > 0 {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Label(
+                            conversationState.queuedPromptCount == 1 ? "1 prompt waiting" : "\(conversationState.queuedPromptCount) prompts waiting",
+                            systemImage: "hourglass.bottomhalf.filled"
+                        )
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.primary.opacity(0.85))
+
+                        Spacer()
+                    }
+
+                    ForEach(Array(conversationState.visibleQueuedPromptPreviews.enumerated()), id: \.offset) { index, preview in
+                        HStack(alignment: .top, spacing: 10) {
+                            Circle()
+                                .fill(Color.white.opacity(index == 0 ? 0.42 : 0.2))
+                                .frame(width: 6, height: 6)
+                                .padding(.top, 6)
+
+                            Text(preview)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white.opacity(0.03))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                        }
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+            }
+
             Divider()
 
             // Input
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("Message...", text: $inputText, axis: .vertical)
+                TextField(conversationState.isStreaming ? "Add to queue..." : "Message...", text: $inputText, axis: .vertical)
                     .textFieldStyle(.plain)
                     .lineLimit(1...8)
                     .focused($inputFocused)
@@ -87,13 +171,14 @@ struct ConversationView: View {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.title2)
                         .foregroundColor(
-                            inputText.isEmpty || conversationState.isStreaming
+                            inputText.isEmpty
                                 ? .secondary : Color.accentColor
                         )
                 }
                 .buttonStyle(.plain)
-                .disabled(inputText.isEmpty || conversationState.isStreaming)
+                .disabled(inputText.isEmpty)
                 .keyboardShortcut(.return, modifiers: .command)
+                .help(conversationState.isStreaming ? "Queue prompt" : "Send")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)

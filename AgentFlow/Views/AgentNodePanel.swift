@@ -4,14 +4,17 @@ import AFAgent
 import AFCanvas
 
 struct AgentNodePanel: View {
+    @Environment(ProviderRegistry.self) private var providerRegistry
     let node: WorkflowNode
     let isSelected: Bool
     let isTitleHovered: Bool
     @Bindable var conversation: ConversationState
+    var onProviderChange: (String) -> Void
     var onSend: (String) -> Void
     var onModelChange: (String) -> Void
     var onEffortChange: (String) -> Void
     var onCancel: () -> Void
+    var onClearConversation: () -> Void
     var onSystemPromptChange: (String) -> Void
     var onPermissionModeChange: (String) -> Void
     var onDelete: () -> Void
@@ -25,24 +28,6 @@ struct AgentNodePanel: View {
     @State private var permissionMode: String
     @FocusState private var inputFocused: Bool
 
-    private let claudeModels = [
-        ("sonnet", "Sonnet 4"),
-        ("opus", "Opus 4"),
-        ("haiku", "Haiku 4.5"),
-        ("claude-sonnet-4-6", "Sonnet 4.6"),
-        ("claude-opus-4-6", "Opus 4.6"),
-    ]
-
-    private let codexModels = [
-        ("gpt-5.4", "GPT-5.4"),
-        ("o3", "o3"),
-        ("o4-mini", "o4-mini"),
-    ]
-
-    private var currentModels: [(String, String)] {
-        selectedProvider == "codex" ? codexModels : claudeModels
-    }
-
     private let efforts = [
         ("low", "Low"),
         ("medium", "Medium"),
@@ -50,29 +35,40 @@ struct AgentNodePanel: View {
         ("max", "Max"),
     ]
 
-    init(node: WorkflowNode, isSelected: Bool, isTitleHovered: Bool = false, conversation: ConversationState,
-         onSend: @escaping (String) -> Void, onModelChange: @escaping (String) -> Void,
-         onEffortChange: @escaping (String) -> Void, onCancel: @escaping () -> Void,
-         onSystemPromptChange: @escaping (String) -> Void, onPermissionModeChange: @escaping (String) -> Void,
-         onDelete: @escaping () -> Void) {
+    init(
+        node: WorkflowNode,
+        isSelected: Bool,
+        isTitleHovered: Bool = false,
+        conversation: ConversationState,
+        onProviderChange: @escaping (String) -> Void,
+        onSend: @escaping (String) -> Void,
+        onModelChange: @escaping (String) -> Void,
+        onEffortChange: @escaping (String) -> Void,
+        onCancel: @escaping () -> Void,
+        onClearConversation: @escaping () -> Void,
+        onSystemPromptChange: @escaping (String) -> Void,
+        onPermissionModeChange: @escaping (String) -> Void,
+        onDelete: @escaping () -> Void
+    ) {
         self.node = node
         self.isSelected = isSelected
         self.isTitleHovered = isTitleHovered
         self.conversation = conversation
+        self.onProviderChange = onProviderChange
         self.onSend = onSend
         self.onModelChange = onModelChange
         self.onEffortChange = onEffortChange
         self.onCancel = onCancel
+        self.onClearConversation = onClearConversation
         self.onSystemPromptChange = onSystemPromptChange
         self.onPermissionModeChange = onPermissionModeChange
         self.onDelete = onDelete
+
         let provider = node.configuration.providerID ?? "claude"
-        let modelID = node.configuration.modelID ?? (provider == "codex" ? "gpt-5.4" : "sonnet")
-        // Validate model belongs to provider
-        let validModels = provider == "codex"
-            ? [("gpt-5.4", ""), ("o3", ""), ("o4-mini", "")]
-            : [("sonnet", ""), ("opus", ""), ("haiku", ""), ("claude-sonnet-4-6", ""), ("claude-opus-4-6", "")]
-        let finalModel = validModels.contains(where: { $0.0 == modelID }) ? modelID : (provider == "codex" ? "gpt-5.4" : "sonnet")
+        let fallbackModels = Self.fallbackModels(for: provider)
+        let modelID = node.configuration.modelID ?? fallbackModels.first?.id ?? "sonnet"
+        let validModelIDs = Set(fallbackModels.map(\.id))
+        let finalModel = validModelIDs.contains(modelID) ? modelID : fallbackModels.first?.id ?? modelID
 
         _selectedProvider = State(initialValue: provider)
         _selectedModel = State(initialValue: finalModel)
@@ -86,6 +82,7 @@ struct AgentNodePanel: View {
             titleBar
             Divider()
             messagesArea
+            queueTray
             contextBar
             Divider()
             inputBar
@@ -104,18 +101,133 @@ struct AgentNodePanel: View {
                 )
         }
         .clipShape(RoundedRectangle(cornerRadius: 14))
-        .onChange(of: isSelected) {
-            if isSelected { inputFocused = true }
+        .onAppear {
+            restoreInputFocusIfNeeded()
         }
+        .onChange(of: isSelected) {
+            restoreInputFocusIfNeeded()
+        }
+    }
+
+    private var providerOptions: [(id: String, name: String)] {
+        let options = providerRegistry.allProviders
+            .map { provider in
+                (
+                    id: provider.id,
+                    name: provider.displayName
+                        .replacingOccurrences(of: " (OpenAI)", with: "")
+                        .replacingOccurrences(of: " (via Claude Code)", with: "")
+                )
+            }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+        if options.isEmpty {
+            return [
+                (id: "claude", name: "Claude"),
+                (id: "codex", name: "Codex"),
+            ]
+        }
+
+        return options
+    }
+
+    private var availableModels: [AIModel] {
+        availableModels(for: selectedProvider)
+    }
+
+    private var selectedProviderName: String {
+        providerOptions.first(where: { $0.id == selectedProvider })?.name ?? selectedProvider.capitalized
+    }
+
+    private var selectedModelName: String {
+        availableModels.first(where: { $0.id == selectedModel })?.name ?? selectedModel
+    }
+
+    private func availableModels(for providerID: String) -> [AIModel] {
+        let models = providerRegistry.provider(for: providerID)?.availableModels ?? []
+        return models.isEmpty ? Self.fallbackModels(for: providerID) : models
+    }
+
+    private static func fallbackModels(for providerID: String) -> [AIModel] {
+        switch providerID {
+        case "codex":
+            return [AIModel(id: "gpt-5.4", name: "GPT-5.4", contextWindow: 200_000)]
+        default:
+            return [
+                AIModel(id: "sonnet", name: "Sonnet (latest)", contextWindow: 200_000),
+                AIModel(id: "opus", name: "Opus (latest)", contextWindow: 1_000_000),
+                AIModel(id: "haiku", name: "Haiku (latest)", contextWindow: 200_000),
+                AIModel(id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: 200_000),
+                AIModel(id: "claude-opus-4-6", name: "Claude Opus 4.6", contextWindow: 1_000_000),
+                AIModel(id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", contextWindow: 200_000),
+            ]
+        }
+    }
+
+    private func selectProvider(_ providerID: String) {
+        selectedProvider = providerID
+        onProviderChange(providerID)
+
+        let models = availableModels(for: providerID)
+        let resolvedModel = models.first(where: { $0.id == selectedModel })?.id ?? models.first?.id
+        if let resolvedModel, resolvedModel != selectedModel {
+            selectedModel = resolvedModel
+            onModelChange(resolvedModel)
+        }
+    }
+
+    private var isWorking: Bool {
+        conversation.runtimePhase.isWorking
+    }
+
+    private var statusColor: Color {
+        switch conversation.runtimePhase {
+        case .responding:
+            Color(red: 0.25, green: 0.83, blue: 0.43)
+        case .preparing:
+            Color(red: 0.88, green: 0.67, blue: 0.22)
+        case .cancelling:
+            .orange
+        case .failed:
+            .red
+        case .idle:
+            Color.white.opacity(0.38)
+        }
+    }
+
+    private var statusLabel: String {
+        conversation.statusLabel
     }
 
     // MARK: - Title Bar
 
     private var titleBar: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(conversation.isStreaming ? Color.blue : .gray.opacity(0.4))
-                .frame(width: 9, height: 9)
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(statusColor.opacity(isWorking ? 0.22 : 0.12))
+                        .frame(width: 18, height: 18)
+
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 9, height: 9)
+                }
+
+                Text(statusLabel)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(isWorking ? statusColor : .secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+                    .overlay {
+                        Capsule(style: .continuous)
+                            .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                    }
+            )
 
             Image(systemName: "brain")
                 .font(.system(size: 14, weight: .semibold))
@@ -127,27 +239,36 @@ struct AgentNodePanel: View {
 
             Spacer()
 
-            // Provider toggle
+            if conversation.queuedPromptCount > 0 {
+                Text(conversation.queuedPromptCount == 1 ? "1 queued" : "\(conversation.queuedPromptCount) queued")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.primary.opacity(0.88))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Color.white.opacity(0.06))
+                            .overlay {
+                                Capsule(style: .continuous)
+                                    .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                            }
+                    )
+            }
+
             Menu {
-                Button {
-                    selectedProvider = "claude"
-                    selectedModel = "sonnet"
-                    onModelChange("sonnet")
-                    onEffortChange(selectedEffort)
-                } label: {
-                    if selectedProvider == "claude" { Label("Claude", systemImage: "checkmark") }
-                    else { Text("Claude") }
-                }
-                Button {
-                    selectedProvider = "codex"
-                    selectedModel = "gpt-5.4"
-                    onModelChange("gpt-5.4")
-                } label: {
-                    if selectedProvider == "codex" { Label("Codex", systemImage: "checkmark") }
-                    else { Text("Codex") }
+                ForEach(providerOptions, id: \.id) { provider in
+                    Button {
+                        selectProvider(provider.id)
+                    } label: {
+                        if selectedProvider == provider.id {
+                            Label(provider.name, systemImage: "checkmark")
+                        } else {
+                            Text(provider.name)
+                        }
+                    }
                 }
             } label: {
-                Text(selectedProvider == "codex" ? "Codex" : "Claude")
+                Text(selectedProviderName)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(selectedProvider == "codex" ? .green : .purple)
                     .padding(.horizontal, 6)
@@ -156,22 +277,21 @@ struct AgentNodePanel: View {
             }
             .menuStyle(.borderlessButton)
 
-            // Model picker
             Menu {
-                ForEach(currentModels, id: \.0) { id, name in
+                ForEach(availableModels) { model in
                     Button {
-                        selectedModel = id
-                        onModelChange(id)
+                        selectedModel = model.id
+                        onModelChange(model.id)
                     } label: {
-                        if id == selectedModel {
-                            Label(name, systemImage: "checkmark")
+                        if model.id == selectedModel {
+                            Label(model.name, systemImage: "checkmark")
                         } else {
-                            Text(name)
+                            Text(model.name)
                         }
                     }
                 }
             } label: {
-                Text(currentModels.first(where: { $0.0 == selectedModel })?.1 ?? selectedModel)
+                Text(selectedModelName)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
@@ -222,19 +342,13 @@ struct AgentNodePanel: View {
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.secondary)
                         Picker("", selection: $selectedProvider) {
-                            Text("Claude Code").tag("claude")
-                            Text("Codex (OpenAI)").tag("codex")
+                            ForEach(providerOptions, id: \.id) { provider in
+                                Text(provider.name).tag(provider.id)
+                            }
                         }
                         .pickerStyle(.segmented)
                         .onChange(of: selectedProvider) { _, val in
-                            // Update provider and reset model
-                            if val == "codex" {
-                                selectedModel = "gpt-4o"
-                                onModelChange("gpt-4o")
-                            } else {
-                                selectedModel = "sonnet"
-                                onModelChange("sonnet")
-                            }
+                            selectProvider(val)
                         }
                     }
 
@@ -266,6 +380,12 @@ struct AgentNodePanel: View {
                                 onSystemPromptChange(val)
                             }
                     }
+
+                    if conversation.queuedPromptCount > 0 {
+                        Text(conversation.queuedPromptCount == 1 ? "1 prompt queued" : "\(conversation.queuedPromptCount) prompts queued")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .padding(16)
             }
@@ -284,7 +404,7 @@ struct AgentNodePanel: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(isTitleHovered ? Color.purple.opacity(0.18) : Color.black.opacity(0.25))
+        .background(isTitleHovered ? Color.white.opacity(0.06) : Color.black.opacity(0.25))
     }
 
     // MARK: - Messages
@@ -324,6 +444,69 @@ struct AgentNodePanel: View {
         }
     }
 
+    @ViewBuilder
+    private var queueTray: some View {
+        if conversation.queuedPromptCount > 0 {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Label(
+                        conversation.queuedPromptCount == 1 ? "1 prompt waiting" : "\(conversation.queuedPromptCount) prompts waiting",
+                        systemImage: "hourglass.bottomhalf.filled"
+                    )
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.primary.opacity(0.85))
+
+                    Spacer()
+
+                    Text("Queued")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(conversation.visibleQueuedPromptPreviews.enumerated()), id: \.offset) { index, preview in
+                        HStack(alignment: .top, spacing: 10) {
+                            Circle()
+                                .fill(Color.white.opacity(index == 0 ? 0.42 : 0.2))
+                                .frame(width: 6, height: 6)
+                                .padding(.top, 6)
+
+                            Text(preview)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                            if index == 0 {
+                                Text("next")
+                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    if conversation.queuedPromptCount > conversation.visibleQueuedPromptPreviews.count {
+                        Text("+\(conversation.queuedPromptCount - conversation.visibleQueuedPromptPreviews.count) more")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(0.03))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                    }
+            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+        }
+    }
+
     private var emptyState: some View {
         VStack(spacing: 8) {
             Image(systemName: "brain")
@@ -344,7 +527,7 @@ struct AgentNodePanel: View {
                 .foregroundStyle(.purple)
                 .frame(width: 20, height: 20)
 
-            Text(try! AttributedString(markdown: conversation.streamingText, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+            Text(streamingAttributedText)
                 .font(.system(size: 14))
                 .lineSpacing(3)
                 .textSelection(.enabled)
@@ -352,6 +535,16 @@ struct AgentNodePanel: View {
         }
         .padding(12)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var streamingAttributedText: AttributedString {
+        if let attributed = try? AttributedString(
+            markdown: conversation.streamingText,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) {
+            return attributed
+        }
+        return AttributedString(conversation.streamingText)
     }
 
     private func errorRow(_ error: String) -> some View {
@@ -372,68 +565,109 @@ struct AgentNodePanel: View {
 
     // MARK: - Token Bar
 
-    private var contextLimit: Int {
-        // Use reported context window from provider if available
-        if let reported = conversation.reportedContextWindow, reported > 0 {
-            return reported
+    private var hasUsageData: Bool {
+        conversation.currentContextTokens != nil ||
+        conversation.totalTokens > 0 ||
+        conversation.reportedContextWindow != nil
+    }
+
+    private var usagePercent: Double? {
+        guard let contextLimit = conversation.reportedContextWindow,
+              contextLimit > 0,
+              let currentContextTokens = conversation.currentContextTokens,
+              currentContextTokens > 0 else {
+            return nil
         }
-        let modelLimits: [String: Int] = [
-            "sonnet": 200_000,
-            "opus": 1_000_000,
-            "haiku": 200_000,
-            "claude-sonnet-4-6": 200_000,
-            "claude-opus-4-6": 1_000_000,
-            "gpt-5.4": 200_000,
-            "o3": 200_000,
-            "o4-mini": 200_000,
-        ]
-        return modelLimits[selectedModel] ?? 200_000
+        return min(100, Double(currentContextTokens) / Double(contextLimit) * 100)
     }
 
-    private var totalTokens: Int {
-        conversation.totalInputTokens + conversation.totalOutputTokens
-    }
-
-    private var usagePercent: Double {
-        guard contextLimit > 0 else { return 0 }
-        return min(100, Double(totalTokens) / Double(contextLimit) * 100)
-    }
-
+    @ViewBuilder
     private var contextBar: some View {
-        HStack(spacing: 8) {
-            // Progress bar
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color(nsColor: .separatorColor).opacity(0.2))
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(usagePercent > 80 ? Color.red : usagePercent > 50 ? Color.orange : Color.purple.opacity(0.6))
-                        .frame(width: max(0, geo.size.width * min(1, usagePercent / 100)))
+        if hasUsageData || conversation.queuedPromptCount > 0 || conversation.isStreaming {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    if conversation.queuedPromptCount > 0 {
+                        Text(conversation.queuedPromptCount == 1 ? "1 queued" : "\(conversation.queuedPromptCount) queued")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color(nsColor: .controlBackgroundColor), in: Capsule())
+                    }
+
+                    Spacer()
+                }
+
+                if let usagePercent {
+                    HStack(spacing: 8) {
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Color(nsColor: .separatorColor).opacity(0.2))
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(usagePercent > 80 ? Color.red : usagePercent > 50 ? Color.orange : Color.green.opacity(0.8))
+                                    .frame(width: max(0, geo.size.width * min(1, usagePercent / 100)))
+                            }
+                        }
+                        .frame(height: 3)
+
+                        Text("Current turn \(Int(usagePercent))% of \(formatTokenCount(conversation.reportedContextWindow ?? 0))")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .fixedSize()
+                    }
+                } else if hasUsageData {
+                    Text(usageSummaryText)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                } else if conversation.isStreaming {
+                    Text("Waiting for provider usage…")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.tertiary)
                 }
             }
-            .frame(height: 3)
-
-            Text("\(Int(usagePercent))% of \(formatContextLimit(contextLimit))")
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.tertiary)
-                .fixedSize()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
     }
 
-    private func formatContextLimit(_ limit: Int) -> String {
-        if limit >= 1_000_000 {
-            return "\(limit / 1_000_000)M"
+    private var usageSummaryText: String {
+        var pieces: [String] = []
+
+        if let currentContextTokens = conversation.currentContextTokens, currentContextTokens > 0 {
+            pieces.append("\(formatTokenCount(currentContextTokens)) last turn")
         }
-        return "\(limit / 1000)K"
+        if conversation.totalTokens > 0 {
+            pieces.append("\(formatTokenCount(conversation.totalTokens)) total")
+        }
+        if conversation.totalReasoningOutputTokens > 0 {
+            pieces.append("\(formatTokenCount(conversation.totalReasoningOutputTokens)) reasoning")
+        }
+        if conversation.totalCachedInputTokens > 0 {
+            pieces.append("\(formatTokenCount(conversation.totalCachedInputTokens)) cached")
+        }
+
+        return pieces.joined(separator: " • ")
+    }
+
+    private func formatTokenCount(_ count: Int) -> String {
+        switch count {
+        case 1_000_000...:
+            return String(format: "%.1fM", Double(count) / 1_000_000).replacingOccurrences(of: ".0", with: "")
+        case 10_000...:
+            return String(format: "%.1fK", Double(count) / 1_000).replacingOccurrences(of: ".0", with: "")
+        case 1_000...:
+            return "\(count / 1_000)K"
+        default:
+            return "\(count)"
+        }
     }
 
     // MARK: - Input Bar
 
     private var inputBar: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            TextField("Message...", text: $inputText, axis: .vertical)
+            TextField(conversation.isStreaming ? "Add to queue..." : "Message...", text: $inputText, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
                 .lineSpacing(2)
@@ -453,24 +687,32 @@ struct AgentNodePanel: View {
                 }
                 .buttonStyle(.plain)
                 .help("Stop")
-            } else {
-                Button {
-                    send()
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(canSend ? Color.accentColor : .secondary)
-                }
-                .buttonStyle(.plain)
-                .disabled(!canSend)
             }
+
+            Button {
+                send()
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(canSend ? Color.accentColor : .secondary)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSend)
+            .help(conversation.isStreaming ? "Queue prompt" : "Send")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
     }
 
     private var canSend: Bool {
-        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !conversation.isStreaming
+        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func restoreInputFocusIfNeeded() {
+        guard isSelected else { return }
+        Task { @MainActor in
+            inputFocused = true
+        }
     }
 
     private func send() {
@@ -494,9 +736,7 @@ struct AgentNodePanel: View {
 
         switch cmd {
         case "/clear":
-            conversation.messages.removeAll()
-            conversation.error = nil
-            conversation.sessionID = nil
+            onClearConversation()
         case "/model":
             if let model = arg {
                 selectedModel = model

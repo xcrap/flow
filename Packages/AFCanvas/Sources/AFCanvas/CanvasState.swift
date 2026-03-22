@@ -31,6 +31,19 @@ public final class CanvasState {
         )
     }
 
+    public func center(on canvasPoint: CGPoint, in viewportSize: CGSize, zoom targetZoom: Double? = nil) {
+        let resolvedZoom = max(0.1, min(3.0, targetZoom ?? zoom))
+
+        if targetZoom != nil {
+            zoom = resolvedZoom
+        }
+
+        offset = CGPoint(
+            x: viewportSize.width / 2 - canvasPoint.x * resolvedZoom,
+            y: viewportSize.height / 2 - canvasPoint.y * resolvedZoom
+        )
+    }
+
     public func visibleRect(in size: CGSize) -> CGRect {
         let origin = screenToCanvas(.zero)
         let extent = screenToCanvas(CGPoint(x: size.width, y: size.height))

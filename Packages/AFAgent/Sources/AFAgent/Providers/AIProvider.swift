@@ -3,6 +3,55 @@ import AFCore
 
 // MARK: - Provider Protocol
 
+public enum ProviderSessionPhase: String, Codable, Sendable {
+    case idle
+    case preparing
+    case responding
+    case cancelling
+    case failed
+
+    public var isWorking: Bool {
+        switch self {
+        case .preparing, .responding, .cancelling:
+            true
+        case .idle, .failed:
+            false
+        }
+    }
+
+    public var statusLabel: String {
+        switch self {
+        case .idle:
+            "Idle"
+        case .preparing:
+            "Starting"
+        case .responding:
+            "Working"
+        case .cancelling:
+            "Stopping"
+        case .failed:
+            "Error"
+        }
+    }
+}
+
+public enum ProviderLifecycleEvent: Sendable, Equatable {
+    case turnStarted(turnID: String?)
+}
+
+public struct ProviderStreamHandle: Sendable {
+    public let stream: AsyncThrowingStream<StreamEvent, Error>
+    public let cancel: @Sendable () async -> Void
+
+    public init(
+        stream: AsyncThrowingStream<StreamEvent, Error>,
+        cancel: @escaping @Sendable () async -> Void
+    ) {
+        self.stream = stream
+        self.cancel = cancel
+    }
+}
+
 public protocol AIProvider: Sendable {
     var id: String { get }
     var displayName: String { get }
@@ -17,9 +66,7 @@ public protocol AIProvider: Sendable {
         permissionMode: String?,
         workingDirectory: URL?,
         resumeSessionID: String?
-    ) -> AsyncThrowingStream<StreamEvent, Error>
-
-    func cancel() async
+    ) -> ProviderStreamHandle
 }
 
 // MARK: - AI Model
@@ -50,12 +97,28 @@ public struct AIModel: Identifiable, Codable, Sendable, Equatable {
 
 public enum StreamEvent: Sendable {
     case initialized(sessionID: String, model: String)
+    case lifecycle(ProviderLifecycleEvent)
     case textDelta(String)
     case text(String)
     case toolUse(id: String, name: String, input: String)
     case toolResult(id: String, content: String, isError: Bool)
     case usage(inputTokens: Int, outputTokens: Int, costUSD: Double?)
-    case usageTotal(totalTokens: Int, contextWindow: Int) // replaces with actual values
+    case contextUsage(
+        inputTokens: Int,
+        outputTokens: Int,
+        cachedInputTokens: Int,
+        reasoningOutputTokens: Int,
+        totalTokens: Int,
+        contextWindow: Int?
+    )
+    case usageTotal(
+        inputTokens: Int,
+        outputTokens: Int,
+        cachedInputTokens: Int,
+        reasoningOutputTokens: Int,
+        totalTokens: Int,
+        contextWindow: Int?
+    )
     case done(stopReason: String)
     case error(String)
 }

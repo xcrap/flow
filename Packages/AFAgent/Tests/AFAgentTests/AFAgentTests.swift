@@ -274,6 +274,7 @@ final class ConversationStateTests: XCTestCase {
         XCTAssertEqual(state.nodeID, nodeID)
         XCTAssertTrue(state.messages.isEmpty)
         XCTAssertFalse(state.isStreaming)
+        XCTAssertEqual(state.runtimePhase, .idle)
         XCTAssertEqual(state.streamingText, "")
         XCTAssertEqual(state.inputText, "")
         XCTAssertNil(state.error)
@@ -281,6 +282,7 @@ final class ConversationStateTests: XCTestCase {
         XCTAssertEqual(state.totalCostUSD, 0)
         XCTAssertEqual(state.totalInputTokens, 0)
         XCTAssertEqual(state.totalOutputTokens, 0)
+        XCTAssertTrue(state.queuedPromptPreviews.isEmpty)
     }
 
     // MARK: - appendUserMessage
@@ -326,6 +328,7 @@ final class ConversationStateTests: XCTestCase {
 
         state.startStreaming()
         XCTAssertTrue(state.isStreaming)
+        XCTAssertEqual(state.runtimePhase, .preparing)
         XCTAssertEqual(state.streamingText, "")
         XCTAssertNil(state.error)
     }
@@ -338,6 +341,7 @@ final class ConversationStateTests: XCTestCase {
         state.startStreaming()
         state.appendStreamDelta("Hello")
         XCTAssertEqual(state.streamingText, "Hello")
+        XCTAssertEqual(state.runtimePhase, .responding)
 
         state.appendStreamDelta(" World")
         XCTAssertEqual(state.streamingText, "Hello World")
@@ -363,6 +367,7 @@ final class ConversationStateTests: XCTestCase {
         state.finishStreaming()
 
         XCTAssertFalse(state.isStreaming)
+        XCTAssertEqual(state.runtimePhase, .idle)
         XCTAssertEqual(state.streamingText, "")
         XCTAssertEqual(state.messages.count, 1)
         XCTAssertEqual(state.messages[0].role, .assistant)
@@ -377,6 +382,7 @@ final class ConversationStateTests: XCTestCase {
         state.finishStreaming()
 
         XCTAssertFalse(state.isStreaming)
+        XCTAssertEqual(state.runtimePhase, .idle)
         XCTAssertEqual(state.streamingText, "")
         XCTAssertTrue(state.messages.isEmpty) // No message created for empty streaming text
     }
@@ -406,17 +412,19 @@ final class ConversationStateTests: XCTestCase {
         state.setError("Network error")
         XCTAssertEqual(state.error, "Network error")
         XCTAssertFalse(state.isStreaming)
+        XCTAssertEqual(state.runtimePhase, .failed)
         XCTAssertEqual(state.streamingText, "")
     }
 
     @MainActor
     func testSetErrorClearsStreamingState() throws {
         let state = ConversationState(nodeID: UUID())
-        state.isStreaming = true
+        state.startStreaming()
         state.streamingText = "some accumulated text"
 
         state.setError("Something went wrong")
         XCTAssertFalse(state.isStreaming)
+        XCTAssertEqual(state.runtimePhase, .failed)
         XCTAssertEqual(state.streamingText, "")
         XCTAssertEqual(state.error, "Something went wrong")
     }
@@ -459,6 +467,214 @@ final class ConversationStateTests: XCTestCase {
         XCTAssertEqual(state.totalCostUSD, 0.05) // unchanged
         XCTAssertEqual(state.totalInputTokens, 150)
         XCTAssertEqual(state.totalOutputTokens, 75)
+    }
+
+    @MainActor
+    func testQueuedPromptPreviewLifecycle() throws {
+        let state = ConversationState(nodeID: UUID())
+
+        state.enqueuePrompt(" second prompt  ")
+        state.enqueuePrompt("third\nprompt")
+
+        XCTAssertEqual(state.queuedPromptCount, 2)
+        XCTAssertEqual(state.nextQueuedPromptPreview, "second prompt")
+        XCTAssertEqual(state.visibleQueuedPromptPreviews, ["second prompt", "third prompt"])
+
+        let startedPrompt = state.beginQueuedPrompt()
+        XCTAssertEqual(startedPrompt, "second prompt")
+        XCTAssertEqual(state.queuedPromptCount, 1)
+        XCTAssertEqual(state.visibleQueuedPromptPreviews, ["third prompt"])
+
+        state.clearQueuedPrompts()
+        XCTAssertEqual(state.queuedPromptCount, 0)
+        XCTAssertTrue(state.queuedPromptPreviews.isEmpty)
+    }
+}
+
+private final class MockProvider: AIProvider, @unchecked Sendable {
+    let id = "mock"
+    let displayName = "Mock"
+    let availableModels = [AIModel(id: "mock-model", name: "Mock Model")]
+
+    private(set) var prompts: [String] = []
+    private(set) var cancelCount = 0
+    private var continuations: [AsyncThrowingStream<StreamEvent, Error>.Continuation] = []
+
+    func sendMessage(
+        prompt: String,
+        messages: [ConversationMessage],
+        model: String,
+        effort: String?,
+        systemPrompt: String?,
+        permissionMode: String?,
+        workingDirectory: URL?,
+        resumeSessionID: String?
+    ) -> ProviderStreamHandle {
+        prompts.append(prompt)
+
+        let stream = AsyncThrowingStream<StreamEvent, Error> { continuation in
+            continuations.append(continuation)
+        }
+
+        return ProviderStreamHandle(stream: stream) { [weak self] in
+            self?.cancelCount += 1
+        }
+    }
+
+    func yield(_ event: StreamEvent, at index: Int) {
+        continuations[index].yield(event)
+    }
+
+    func finish(at index: Int) {
+        continuations[index].finish()
+    }
+}
+
+private func waitForCondition(
+    timeoutMS: Int = 1_000,
+    pollMS: Int = 10,
+    condition: @escaping @MainActor () -> Bool
+) async -> Bool {
+    let iterations = max(1, timeoutMS / pollMS)
+    for _ in 0..<iterations {
+        if await MainActor.run(body: condition) {
+            return true
+        }
+        try? await Task.sleep(for: .milliseconds(pollMS))
+    }
+    return await MainActor.run(body: condition)
+}
+
+final class ConversationServiceTests: XCTestCase {
+
+    @MainActor
+    func testSendQueuesPromptWhileStreaming() async throws {
+        let provider = MockProvider()
+        let registry = ProviderRegistry()
+        registry.register(provider)
+
+        let service = ConversationService(registry: registry)
+        let state = ConversationState(nodeID: UUID())
+
+        var completionCount = 0
+
+        service.send(
+            prompt: "first",
+            to: state,
+            providerID: provider.id,
+            model: "mock-model",
+            onComplete: { completionCount += 1 }
+        )
+
+        XCTAssertEqual(provider.prompts, ["first"])
+        XCTAssertTrue(state.isStreaming)
+        XCTAssertEqual(state.runtimePhase, .preparing)
+
+        service.send(
+            prompt: "second",
+            to: state,
+            providerID: provider.id,
+            model: "mock-model",
+            onComplete: { completionCount += 1 }
+        )
+
+        XCTAssertEqual(provider.prompts, ["first"])
+        XCTAssertEqual(state.queuedPromptCount, 1)
+        XCTAssertEqual(state.queuedPromptPreviews, ["second"])
+        XCTAssertEqual(state.messages.map(\.textContent), ["first"])
+
+        provider.yield(.initialized(sessionID: "session-1", model: "mock-model"), at: 0)
+        provider.yield(.lifecycle(.turnStarted(turnID: "turn-1")), at: 0)
+        provider.yield(.textDelta("reply"), at: 0)
+        provider.finish(at: 0)
+
+        let didStartQueuedRequest = await waitForCondition {
+            provider.prompts.count == 2 &&
+            state.queuedPromptCount == 0 &&
+            state.messages.map(\.textContent) == ["first", "reply", "second"]
+        }
+        XCTAssertTrue(didStartQueuedRequest)
+
+        XCTAssertEqual(provider.prompts, ["first", "second"])
+        XCTAssertEqual(state.queuedPromptCount, 0)
+        XCTAssertTrue(state.queuedPromptPreviews.isEmpty)
+        XCTAssertEqual(state.messages.map(\.textContent), ["first", "reply", "second"])
+
+        provider.yield(.initialized(sessionID: "session-1", model: "mock-model"), at: 1)
+        provider.yield(.lifecycle(.turnStarted(turnID: "turn-2")), at: 1)
+        provider.yield(.textDelta("second reply"), at: 1)
+        provider.finish(at: 1)
+
+        let didDrainQueue = await waitForCondition {
+            completionCount == 2 &&
+            !state.isStreaming &&
+            state.messages.map(\.textContent) == ["first", "reply", "second", "second reply"]
+        }
+        XCTAssertTrue(didDrainQueue)
+
+        XCTAssertEqual(completionCount, 2)
+        XCTAssertFalse(state.isStreaming)
+        XCTAssertEqual(state.runtimePhase, .idle)
+    }
+
+    @MainActor
+    func testCancelStreamingCallsProviderCancellation() async throws {
+        let provider = MockProvider()
+        let registry = ProviderRegistry()
+        registry.register(provider)
+
+        let service = ConversationService(registry: registry)
+        let state = ConversationState(nodeID: UUID())
+
+        service.send(
+            prompt: "cancel me",
+            to: state,
+            providerID: provider.id,
+            model: "mock-model"
+        )
+
+        service.cancelStreaming(for: state.nodeID)
+        let didCancel = await waitForCondition {
+            provider.cancelCount == 1 &&
+            state.runtimePhase == .idle &&
+            state.lastStopReason == "cancelled"
+        }
+        XCTAssertTrue(didCancel)
+
+        XCTAssertEqual(provider.cancelCount, 1)
+        XCTAssertEqual(state.runtimePhase, .idle)
+        XCTAssertEqual(state.lastStopReason, "cancelled")
+    }
+
+    @MainActor
+    func testUsageEventSeedsContextPercentageFromModelMetadata() async throws {
+        let provider = MockProvider()
+        let registry = ProviderRegistry()
+        registry.register(provider)
+
+        let service = ConversationService(registry: registry)
+        let state = ConversationState(nodeID: UUID())
+
+        service.send(
+            prompt: "hello",
+            to: state,
+            providerID: provider.id,
+            model: "mock-model"
+        )
+
+        provider.yield(.initialized(sessionID: "session-1", model: "mock-model"), at: 0)
+        provider.yield(.usage(inputTokens: 120, outputTokens: 30, costUSD: 1.23), at: 0)
+        provider.finish(at: 0)
+
+        let didCaptureUsage = await waitForCondition {
+            state.reportedContextWindow == 200_000 &&
+            state.currentContextTokens == 150 &&
+            state.totalTokens == 150
+        }
+        XCTAssertTrue(didCaptureUsage)
+        XCTAssertEqual(state.reportedContextWindow, 200_000)
+        XCTAssertEqual(state.currentContextTokens, 150)
+        XCTAssertEqual(state.totalTokens, 150)
     }
 }
 
@@ -567,6 +783,15 @@ final class StreamEventTests: XCTestCase {
             XCTAssertEqual(t, "chunk")
         } else {
             XCTFail("Expected .textDelta")
+        }
+    }
+
+    func testStreamEventLifecycle() throws {
+        let event = StreamEvent.lifecycle(.turnStarted(turnID: "turn-123"))
+        if case .lifecycle(.turnStarted(let turnID)) = event {
+            XCTAssertEqual(turnID, "turn-123")
+        } else {
+            XCTFail("Expected .lifecycle turnStarted")
         }
     }
 

@@ -485,6 +485,30 @@ final class CanvasStateTests: XCTestCase {
     }
 
     @MainActor
+    func testCenterOnCanvasPointPreservesCurrentZoom() throws {
+        let canvas = CanvasState()
+        canvas.zoom = 2.0
+
+        canvas.center(on: CGPoint(x: 100, y: 50), in: CGSize(width: 800, height: 600))
+
+        XCTAssertEqual(canvas.zoom, 2.0)
+        XCTAssertEqual(canvas.offset.x, 200)
+        XCTAssertEqual(canvas.offset.y, 200)
+    }
+
+    @MainActor
+    func testCenterOnCanvasPointWithTargetZoom() throws {
+        let canvas = CanvasState()
+        canvas.zoom = 1.0
+
+        canvas.center(on: CGPoint(x: 120, y: 80), in: CGSize(width: 1000, height: 700), zoom: 1.5)
+
+        XCTAssertEqual(canvas.zoom, 1.5)
+        XCTAssertEqual(canvas.offset.x, 320)
+        XCTAssertEqual(canvas.offset.y, 230)
+    }
+
+    @MainActor
     func testVisibleRect() throws {
         let canvas = CanvasState()
         canvas.zoom = 1.0

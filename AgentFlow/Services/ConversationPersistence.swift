@@ -8,8 +8,52 @@ struct PersistedConversation: Codable {
     var nodeID: UUID
     var sessionID: String?
     var messages: [ConversationMessage]
+    var totalCostUSD: Double
     var totalInputTokens: Int
     var totalOutputTokens: Int
+    var totalCachedInputTokens: Int
+    var totalReasoningOutputTokens: Int
+    var totalTokens: Int
+    var reportedContextWindow: Int?
+
+    init(
+        nodeID: UUID,
+        sessionID: String?,
+        messages: [ConversationMessage],
+        totalCostUSD: Double,
+        totalInputTokens: Int,
+        totalOutputTokens: Int,
+        totalCachedInputTokens: Int,
+        totalReasoningOutputTokens: Int,
+        totalTokens: Int,
+        reportedContextWindow: Int?
+    ) {
+        self.nodeID = nodeID
+        self.sessionID = sessionID
+        self.messages = messages
+        self.totalCostUSD = totalCostUSD
+        self.totalInputTokens = totalInputTokens
+        self.totalOutputTokens = totalOutputTokens
+        self.totalCachedInputTokens = totalCachedInputTokens
+        self.totalReasoningOutputTokens = totalReasoningOutputTokens
+        self.totalTokens = totalTokens
+        self.reportedContextWindow = reportedContextWindow
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        nodeID = try container.decode(UUID.self, forKey: .nodeID)
+        sessionID = try container.decodeIfPresent(String.self, forKey: .sessionID)
+        messages = try container.decode([ConversationMessage].self, forKey: .messages)
+        totalCostUSD = try container.decodeIfPresent(Double.self, forKey: .totalCostUSD) ?? 0
+        totalInputTokens = try container.decodeIfPresent(Int.self, forKey: .totalInputTokens) ?? 0
+        totalOutputTokens = try container.decodeIfPresent(Int.self, forKey: .totalOutputTokens) ?? 0
+        totalCachedInputTokens = try container.decodeIfPresent(Int.self, forKey: .totalCachedInputTokens) ?? 0
+        totalReasoningOutputTokens = try container.decodeIfPresent(Int.self, forKey: .totalReasoningOutputTokens) ?? 0
+        totalTokens = try container.decodeIfPresent(Int.self, forKey: .totalTokens)
+            ?? (totalInputTokens + totalOutputTokens + totalCachedInputTokens + totalReasoningOutputTokens)
+        reportedContextWindow = try container.decodeIfPresent(Int.self, forKey: .reportedContextWindow)
+    }
 }
 
 struct PersistedTerminal: Codable {
@@ -47,8 +91,13 @@ enum ConversationPersistence {
                     nodeID: nodeID,
                     sessionID: state.sessionID,
                     messages: state.messages,
+                    totalCostUSD: state.totalCostUSD,
                     totalInputTokens: state.totalInputTokens,
-                    totalOutputTokens: state.totalOutputTokens
+                    totalOutputTokens: state.totalOutputTokens,
+                    totalCachedInputTokens: state.totalCachedInputTokens,
+                    totalReasoningOutputTokens: state.totalReasoningOutputTokens,
+                    totalTokens: state.totalTokens,
+                    reportedContextWindow: state.reportedContextWindow
                 )
             },
             terminals: terminals.map { (nodeID, session) in
@@ -83,8 +132,13 @@ enum ConversationPersistence {
             let state = ConversationState(nodeID: conv.nodeID)
             state.sessionID = conv.sessionID
             state.messages = conv.messages
+            state.totalCostUSD = conv.totalCostUSD
             state.totalInputTokens = conv.totalInputTokens
             state.totalOutputTokens = conv.totalOutputTokens
+            state.totalCachedInputTokens = conv.totalCachedInputTokens
+            state.totalReasoningOutputTokens = conv.totalReasoningOutputTokens
+            state.totalTokens = conv.totalTokens
+            state.reportedContextWindow = conv.reportedContextWindow
             result[conv.nodeID] = state
         }
         return result

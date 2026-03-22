@@ -8,6 +8,7 @@ public final class AppState {
     public var activeProjectID: UUID?
     public var pendingApprovals: [ToolApprovalRequest] = []
     public var sidebarSelection: SidebarItem? = nil
+    private var scheduledSaveTask: Task<Void, Never>?
 
     public init() {}
 
@@ -44,6 +45,17 @@ public final class AppState {
     }
 
     public func scheduleSave() {
+        scheduledSaveTask?.cancel()
+        scheduledSaveTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+            guard let self, !Task.isCancelled else { return }
+            ProjectPersistence.save(self)
+        }
+    }
+
+    public func flushSaveNow() {
+        scheduledSaveTask?.cancel()
+        scheduledSaveTask = nil
         ProjectPersistence.save(self)
     }
 }
