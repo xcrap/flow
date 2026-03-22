@@ -9,7 +9,7 @@ struct AgentFlowCommands: Commands {
     @Binding var showCommandPalette: Bool
 
     var body: some Commands {
-        CommandGroup(after: .newItem) {
+        CommandGroup(replacing: .newItem) {
             Button("New Project") {
                 showNewProject = true
             }
