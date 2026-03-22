@@ -1,4 +1,0 @@
-module AFCanvas {
-header "AFCanvas-Swift.h"
-export *
-}

@@ -1,4 +1,0 @@
-module AFAgent {
-header "AFAgent-Swift.h"
-export *
-}

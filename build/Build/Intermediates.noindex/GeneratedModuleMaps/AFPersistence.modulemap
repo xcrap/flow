@@ -1,4 +1,0 @@
-module AFPersistence {
-header "AFPersistence-Swift.h"
-export *
-}

@@ -1,9 +1,0 @@
-/Users/xcrap/projects/agentflow/Packages/AFAgent/Sources/AFAgent/AFAgent.swift
-/Users/xcrap/projects/agentflow/Packages/AFAgent/Sources/AFAgent/Conversation/ConversationService.swift
-/Users/xcrap/projects/agentflow/Packages/AFAgent/Sources/AFAgent/Conversation/ConversationState.swift
-/Users/xcrap/projects/agentflow/Packages/AFAgent/Sources/AFAgent/Conversation/TerminalSession.swift
-/Users/xcrap/projects/agentflow/Packages/AFAgent/Sources/AFAgent/Providers/AIProvider.swift
-/Users/xcrap/projects/agentflow/Packages/AFAgent/Sources/AFAgent/Providers/ClaudeCodeProvider.swift
-/Users/xcrap/projects/agentflow/Packages/AFAgent/Sources/AFAgent/Providers/CodexProvider.swift
-/Users/xcrap/projects/agentflow/Packages/AFAgent/Sources/AFAgent/Providers/OpenAIProvider.swift
-/Users/xcrap/projects/agentflow/Packages/AFAgent/Sources/AFAgent/Tools/GitService.swift
