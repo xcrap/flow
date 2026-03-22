@@ -22,21 +22,21 @@ class ClickDetectorNSView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
 
-        // Remove old monitor
-        if let monitor { NSEvent.removeMonitor(monitor) }
+        removeMonitor()
 
         guard window != nil else { return }
 
         monitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
             self?.handleClick(event)
-            return event // always pass through
+            return event
         }
     }
 
-    override func removeFromSuperview() {
-        if let monitor { NSEvent.removeMonitor(monitor) }
-        monitor = nil
-        super.removeFromSuperview()
+    private func removeMonitor() {
+        if let m = monitor {
+            NSEvent.removeMonitor(m)
+            monitor = nil
+        }
     }
 
     private func handleClick(_ event: NSEvent) {

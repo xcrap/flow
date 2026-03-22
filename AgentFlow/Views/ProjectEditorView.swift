@@ -324,20 +324,29 @@ struct ProjectEditorView: View {
 
     private func conversationFor(_ nodeID: UUID) -> ConversationState {
         if let existing = conversations[nodeID] { return existing }
-        // Don't create new until we've loaded saved conversations
-        guard conversationsLoaded else {
-            let conv = ConversationState(nodeID: nodeID)
-            return conv
-        }
         let conv = ConversationState(nodeID: nodeID)
-        DispatchQueue.main.async { conversations[nodeID] = conv }
+        // Only persist if we've already loaded (otherwise we'd overwrite saved data)
+        if conversationsLoaded {
+            DispatchQueue.main.async { [self] in
+                // Double check it wasn't loaded in the meantime
+                if conversations[nodeID] == nil {
+                    conversations[nodeID] = conv
+                }
+            }
+        }
         return conv
     }
 
     private func terminalSessionFor(_ nodeID: UUID, rootPath: String) -> TerminalSession {
         if let existing = terminalSessions[nodeID] { return existing }
         let session = TerminalSession(id: nodeID, currentDirectory: rootPath)
-        DispatchQueue.main.async { terminalSessions[nodeID] = session }
+        if conversationsLoaded {
+            DispatchQueue.main.async { [self] in
+                if terminalSessions[nodeID] == nil {
+                    terminalSessions[nodeID] = session
+                }
+            }
+        }
         return session
     }
 
