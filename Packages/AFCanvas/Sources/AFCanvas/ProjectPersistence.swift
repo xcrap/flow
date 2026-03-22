@@ -37,14 +37,8 @@ public final class ProjectPersistence {
 
         let currentCount = appState.openProjects.count
 
-        // Safety: never save fewer projects than we know exist
-        // unless the count decreased by exactly 1 (user deleted one)
+        // Safety: never lose more than 1 project at a time (prevent accidental wipe)
         if currentCount < knownProjectCount && (knownProjectCount - currentCount) > 1 {
-            return // Something went wrong, don't overwrite
-        }
-
-        // Never overwrite with empty
-        if currentCount == 0 && FileManager.default.fileExists(atPath: saveURL.path) {
             return
         }
 

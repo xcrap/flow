@@ -1,0 +1,5 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/xcrap/projects/agentflow/build/Build/Products/Release/AgentFlow.app/Contents/MacOS/AgentFlow'
+relocations:     []
+...

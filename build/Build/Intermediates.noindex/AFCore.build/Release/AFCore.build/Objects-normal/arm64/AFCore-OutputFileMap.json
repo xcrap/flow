@@ -1,0 +1,46 @@
+{
+  "" : {
+    "const-values" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/AFCore-primary.swiftconstvalues",
+    "dependencies" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/AFCore-primary.d",
+    "diagnostics" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/AFCore-primary.dia",
+    "emit-module-dependencies" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/AFCore-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/AFCore-primary-emit-module.dia",
+    "pch" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/AFCore-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/AFCore-primary.swiftdeps"
+  },
+  "/Users/xcrap/projects/agentflow/Packages/AFCore/Sources/AFCore/Models/Checkpoint.swift" : {
+    "index-unit-output-path" : "/AFCore.build/Release/AFCore.build/Objects-normal/arm64/Checkpoint.o",
+    "llvm-bc" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/Checkpoint.bc",
+    "object" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/Checkpoint.o"
+  },
+  "/Users/xcrap/projects/agentflow/Packages/AFCore/Sources/AFCore/Models/Conversation.swift" : {
+    "index-unit-output-path" : "/AFCore.build/Release/AFCore.build/Objects-normal/arm64/Conversation.o",
+    "llvm-bc" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/Conversation.bc",
+    "object" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/Conversation.o"
+  },
+  "/Users/xcrap/projects/agentflow/Packages/AFCore/Sources/AFCore/Models/NodeConnection.swift" : {
+    "index-unit-output-path" : "/AFCore.build/Release/AFCore.build/Objects-normal/arm64/NodeConnection.o",
+    "llvm-bc" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/NodeConnection.bc",
+    "object" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/NodeConnection.o"
+  },
+  "/Users/xcrap/projects/agentflow/Packages/AFCore/Sources/AFCore/Models/Project.swift" : {
+    "index-unit-output-path" : "/AFCore.build/Release/AFCore.build/Objects-normal/arm64/Project.o",
+    "llvm-bc" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/Project.bc",
+    "object" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/Project.o"
+  },
+  "/Users/xcrap/projects/agentflow/Packages/AFCore/Sources/AFCore/Models/ProjectSession.swift" : {
+    "index-unit-output-path" : "/AFCore.build/Release/AFCore.build/Objects-normal/arm64/ProjectSession.o",
+    "llvm-bc" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/ProjectSession.bc",
+    "object" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/ProjectSession.o"
+  },
+  "/Users/xcrap/projects/agentflow/Packages/AFCore/Sources/AFCore/Models/ToolApproval.swift" : {
+    "index-unit-output-path" : "/AFCore.build/Release/AFCore.build/Objects-normal/arm64/ToolApproval.o",
+    "llvm-bc" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/ToolApproval.bc",
+    "object" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/ToolApproval.o"
+  },
+  "/Users/xcrap/projects/agentflow/Packages/AFCore/Sources/AFCore/Models/WorkflowNode.swift" : {
+    "index-unit-output-path" : "/AFCore.build/Release/AFCore.build/Objects-normal/arm64/WorkflowNode.o",
+    "llvm-bc" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/WorkflowNode.bc",
+    "object" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCore.build/Release/AFCore.build/Objects-normal/arm64/WorkflowNode.o"
+  }
+}

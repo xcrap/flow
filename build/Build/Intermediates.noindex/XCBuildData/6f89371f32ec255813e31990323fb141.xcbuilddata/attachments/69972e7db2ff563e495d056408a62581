@@ -1,0 +1,16 @@
+{
+  "" : {
+    "const-values" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFTerminal.build/Release/AFTerminal.build/Objects-normal/arm64/AFTerminal-primary.swiftconstvalues",
+    "dependencies" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFTerminal.build/Release/AFTerminal.build/Objects-normal/arm64/AFTerminal-primary.d",
+    "diagnostics" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFTerminal.build/Release/AFTerminal.build/Objects-normal/arm64/AFTerminal-primary.dia",
+    "emit-module-dependencies" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFTerminal.build/Release/AFTerminal.build/Objects-normal/arm64/AFTerminal-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFTerminal.build/Release/AFTerminal.build/Objects-normal/arm64/AFTerminal-primary-emit-module.dia",
+    "pch" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFTerminal.build/Release/AFTerminal.build/Objects-normal/arm64/AFTerminal-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFTerminal.build/Release/AFTerminal.build/Objects-normal/arm64/AFTerminal-primary.swiftdeps"
+  },
+  "/Users/xcrap/projects/agentflow/Packages/AFTerminal/Sources/AFTerminal/AFTerminal.swift" : {
+    "index-unit-output-path" : "/AFTerminal.build/Release/AFTerminal.build/Objects-normal/arm64/AFTerminal.o",
+    "llvm-bc" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFTerminal.build/Release/AFTerminal.build/Objects-normal/arm64/AFTerminal.bc",
+    "object" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFTerminal.build/Release/AFTerminal.build/Objects-normal/arm64/AFTerminal.o"
+  }
+}

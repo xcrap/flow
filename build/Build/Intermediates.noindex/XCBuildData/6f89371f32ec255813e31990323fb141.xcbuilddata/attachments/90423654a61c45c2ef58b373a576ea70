@@ -1,0 +1,4 @@
+module AFTerminal {
+header "AFTerminal-Swift.h"
+export *
+}

@@ -1,0 +1,12 @@
+{
+  "/Users/xcrap/projects/agentflow/AgentFlow/AgentFlowApp.swift" : {
+    "abi-baseline-json" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AgentFlow.build/Release/AgentFlow.build/Objects-normal/arm64/AgentFlow.abi.json",
+    "const-values" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AgentFlow.build/Release/AgentFlow.build/Objects-normal/arm64/AgentFlow-primary.swiftconstvalues",
+    "dependencies" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AgentFlow.build/Release/AgentFlow.build/Objects-normal/arm64/AgentFlow-primary.d",
+    "diagnostics" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AgentFlow.build/Release/AgentFlow.build/Objects-normal/arm64/AgentFlow-primary.dia",
+    "objc-header" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AgentFlow.build/Release/AgentFlow.build/Objects-normal/arm64/AgentFlow-Swift.h",
+    "swiftdoc" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AgentFlow.build/Release/AgentFlow.build/Objects-normal/arm64/AgentFlow.swiftdoc",
+    "swiftmodule" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AgentFlow.build/Release/AgentFlow.build/Objects-normal/arm64/AgentFlow.swiftmodule",
+    "swiftsourceinfo" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AgentFlow.build/Release/AgentFlow.build/Objects-normal/arm64/AgentFlow.swiftsourceinfo"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "/Users/xcrap/projects/agentflow/Packages/AFCanvas/Sources/AFCanvas/AppState.swift" : {
+    "abi-baseline-json" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCanvas.build/Release/AFCanvas.build/Objects-normal/arm64/AFCanvas.abi.json",
+    "const-values" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCanvas.build/Release/AFCanvas.build/Objects-normal/arm64/AFCanvas-primary.swiftconstvalues",
+    "dependencies" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCanvas.build/Release/AFCanvas.build/Objects-normal/arm64/AFCanvas-primary.d",
+    "diagnostics" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCanvas.build/Release/AFCanvas.build/Objects-normal/arm64/AFCanvas-primary.dia",
+    "objc-header" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCanvas.build/Release/AFCanvas.build/Objects-normal/arm64/AFCanvas-Swift.h",
+    "swiftdoc" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCanvas.build/Release/AFCanvas.build/Objects-normal/arm64/AFCanvas.swiftdoc",
+    "swiftmodule" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCanvas.build/Release/AFCanvas.build/Objects-normal/arm64/AFCanvas.swiftmodule",
+    "swiftsourceinfo" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFCanvas.build/Release/AFCanvas.build/Objects-normal/arm64/AFCanvas.swiftsourceinfo"
+  }
+}

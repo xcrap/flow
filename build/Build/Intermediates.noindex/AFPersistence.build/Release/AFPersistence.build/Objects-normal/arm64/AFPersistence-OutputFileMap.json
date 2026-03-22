@@ -1,0 +1,16 @@
+{
+  "" : {
+    "const-values" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFPersistence.build/Release/AFPersistence.build/Objects-normal/arm64/AFPersistence-primary.swiftconstvalues",
+    "dependencies" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFPersistence.build/Release/AFPersistence.build/Objects-normal/arm64/AFPersistence-primary.d",
+    "diagnostics" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFPersistence.build/Release/AFPersistence.build/Objects-normal/arm64/AFPersistence-primary.dia",
+    "emit-module-dependencies" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFPersistence.build/Release/AFPersistence.build/Objects-normal/arm64/AFPersistence-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFPersistence.build/Release/AFPersistence.build/Objects-normal/arm64/AFPersistence-primary-emit-module.dia",
+    "pch" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFPersistence.build/Release/AFPersistence.build/Objects-normal/arm64/AFPersistence-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFPersistence.build/Release/AFPersistence.build/Objects-normal/arm64/AFPersistence-primary.swiftdeps"
+  },
+  "/Users/xcrap/projects/agentflow/Packages/AFPersistence/Sources/AFPersistence/AFPersistence.swift" : {
+    "index-unit-output-path" : "/AFPersistence.build/Release/AFPersistence.build/Objects-normal/arm64/AFPersistence.o",
+    "llvm-bc" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFPersistence.build/Release/AFPersistence.build/Objects-normal/arm64/AFPersistence.bc",
+    "object" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFPersistence.build/Release/AFPersistence.build/Objects-normal/arm64/AFPersistence.o"
+  }
+}

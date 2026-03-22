@@ -1,0 +1,4 @@
+module AFDiff {
+header "AFDiff-Swift.h"
+export *
+}

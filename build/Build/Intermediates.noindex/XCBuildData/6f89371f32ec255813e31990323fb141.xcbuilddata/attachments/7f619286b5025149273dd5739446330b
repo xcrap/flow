@@ -1,0 +1,4 @@
+module AFCore {
+header "AFCore-Swift.h"
+export *
+}

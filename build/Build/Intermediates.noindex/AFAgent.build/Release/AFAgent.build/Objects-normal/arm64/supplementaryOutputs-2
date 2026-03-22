@@ -1,0 +1,12 @@
+{
+  "/Users/xcrap/projects/agentflow/Packages/AFAgent/Sources/AFAgent/AFAgent.swift" : {
+    "abi-baseline-json" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFAgent.build/Release/AFAgent.build/Objects-normal/arm64/AFAgent.abi.json",
+    "const-values" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFAgent.build/Release/AFAgent.build/Objects-normal/arm64/AFAgent-primary.swiftconstvalues",
+    "dependencies" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFAgent.build/Release/AFAgent.build/Objects-normal/arm64/AFAgent-primary.d",
+    "diagnostics" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFAgent.build/Release/AFAgent.build/Objects-normal/arm64/AFAgent-primary.dia",
+    "objc-header" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFAgent.build/Release/AFAgent.build/Objects-normal/arm64/AFAgent-Swift.h",
+    "swiftdoc" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFAgent.build/Release/AFAgent.build/Objects-normal/arm64/AFAgent.swiftdoc",
+    "swiftmodule" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFAgent.build/Release/AFAgent.build/Objects-normal/arm64/AFAgent.swiftmodule",
+    "swiftsourceinfo" : "/Users/xcrap/projects/agentflow/build/Build/Intermediates.noindex/AFAgent.build/Release/AFAgent.build/Objects-normal/arm64/AFAgent.swiftsourceinfo"
+  }
+}
