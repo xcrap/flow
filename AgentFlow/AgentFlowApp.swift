@@ -7,7 +7,6 @@ import AFCanvas
 struct AgentFlowApp: App {
     @State private var appState: AppState
     @State private var providerRegistry = ProviderRegistry()
-    @State private var showNewProject = false
     @State private var sidebarVisible = true
     @State private var showCommandPalette = false
 
@@ -20,7 +19,6 @@ struct AgentFlowApp: App {
     var body: some Scene {
         WindowGroup {
             ProjectEditorView(
-                showNewProject: $showNewProject,
                 sidebarVisible: $sidebarVisible,
                 showCommandPalette: $showCommandPalette
             )
@@ -32,7 +30,6 @@ struct AgentFlowApp: App {
         .commands {
             AgentFlowCommands(
                 appState: appState,
-                showNewProject: $showNewProject,
                 sidebarVisible: $sidebarVisible,
                 showCommandPalette: $showCommandPalette
             )

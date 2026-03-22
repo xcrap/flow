@@ -4,14 +4,21 @@ import AFCanvas
 
 struct AgentFlowCommands: Commands {
     let appState: AppState
-    @Binding var showNewProject: Bool
     @Binding var sidebarVisible: Bool
     @Binding var showCommandPalette: Bool
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Project") {
-                showNewProject = true
+                let panel = NSOpenPanel()
+                panel.canChooseFiles = false
+                panel.canChooseDirectories = true
+                panel.allowsMultipleSelection = false
+                panel.message = "Choose the root folder for your project"
+                panel.prompt = "Select Folder"
+                if panel.runModal() == .OK, let url = panel.url {
+                    appState.createProject(name: url.lastPathComponent, rootPath: url.path)
+                }
             }
             .keyboardShortcut("n", modifiers: .command)
         }

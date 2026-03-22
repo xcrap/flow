@@ -6,7 +6,6 @@ import AFCanvas
 struct ProjectEditorView: View {
     @Environment(AppState.self) private var appState
     @Environment(ProviderRegistry.self) private var providerRegistry
-    @Binding var showNewProject: Bool
     @Binding var sidebarVisible: Bool
     @Binding var showCommandPalette: Bool
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -80,20 +79,6 @@ struct ProjectEditorView: View {
         }
         .sheet(isPresented: $showCommitSheet) {
             commitSheet
-        }
-        .onChange(of: showNewProject) {
-            if showNewProject {
-                showNewProject = false
-                let panel = NSOpenPanel()
-                panel.canChooseFiles = false
-                panel.canChooseDirectories = true
-                panel.allowsMultipleSelection = false
-                panel.message = "Choose the root folder for your project"
-                panel.prompt = "Select Folder"
-                if panel.runModal() == .OK, let url = panel.url {
-                    appState.createProject(name: url.lastPathComponent, rootPath: url.path)
-                }
-            }
         }
         .onChange(of: sidebarVisible) {
             withAnimation {
@@ -182,7 +167,15 @@ struct ProjectEditorView: View {
             project.canvasState.zoom = 1.0
             project.canvasState.offset = .zero
         case .newProject:
-            showNewProject = true
+            let panel = NSOpenPanel()
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+            panel.allowsMultipleSelection = false
+            panel.message = "Choose the root folder for your project"
+            panel.prompt = "Select Folder"
+            if panel.runModal() == .OK, let url = panel.url {
+                appState.createProject(name: url.lastPathComponent, rootPath: url.path)
+            }
         case .toggleSidebar:
             NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil)
         case .openSettings:
