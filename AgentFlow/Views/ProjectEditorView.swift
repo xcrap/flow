@@ -187,21 +187,33 @@ struct ProjectEditorView: View {
         let sortedNodes = project.nodes.values.sorted { $0.id.uuidString < $1.id.uuidString }
         guard !sortedNodes.isEmpty else { return }
 
-        // Find the max width and height across all nodes for uniform grid
-        let maxW = sortedNodes.map(\.position.width).max() ?? 560
-        let maxH = sortedNodes.map(\.position.height).max() ?? 680
-        let gap: Double = 60
-
+        let gap: Double = 20
         let columns = max(1, Int(ceil(sqrt(Double(sortedNodes.count)))))
 
         withAnimation(.spring(duration: 0.5)) {
+            // Place nodes in a grid, using each node's actual size
+            var cursorX: Double = 0
+            var cursorY: Double = 0
+            var rowHeight: Double = 0
+
             for (index, node) in sortedNodes.enumerated() {
                 let col = index % columns
-                let row = index / columns
-                let x = Double(col) * (maxW + gap) + maxW / 2
-                let y = Double(row) * (maxH + gap) + maxH / 2
-                project.nodes[node.id]?.position.x = x
-                project.nodes[node.id]?.position.y = y
+
+                if col == 0 && index > 0 {
+                    // New row
+                    cursorX = 0
+                    cursorY += rowHeight + gap
+                    rowHeight = 0
+                }
+
+                let w = node.position.width
+                let h = node.position.height
+
+                project.nodes[node.id]?.position.x = cursorX + w / 2
+                project.nodes[node.id]?.position.y = cursorY + h / 2
+
+                cursorX += w + gap
+                rowHeight = max(rowHeight, h)
             }
         }
 
