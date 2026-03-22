@@ -31,6 +31,7 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         model: String,
         effort: String?,
         systemPrompt: String?,
+        permissionMode: String?,
         workingDirectory: URL?,
         resumeSessionID: String?
     ) -> AsyncThrowingStream<StreamEvent, Error> {
@@ -42,6 +43,7 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
                         model: model,
                         effort: effort,
                         systemPrompt: systemPrompt,
+                        permissionMode: permissionMode,
                         workingDirectory: workingDirectory,
                         resumeSessionID: resumeSessionID,
                         continuation: continuation
@@ -112,6 +114,7 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         model: String,
         effort: String?,
         systemPrompt: String?,
+        permissionMode: String?,
         workingDirectory: URL?,
         resumeSessionID: String?,
         continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
@@ -124,7 +127,7 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         if claudeURL.path == "/usr/bin/env" {
             process.executableURL = claudeURL
             var args = ["claude"]
-            args += Self.buildArgs(model: model, effort: effort, systemPrompt: systemPrompt, prompt: prompt, resumeSessionID: resumeSessionID)
+            args += Self.buildArgs(model: model, effort: effort, systemPrompt: systemPrompt, permissionMode: permissionMode, prompt: prompt, resumeSessionID: resumeSessionID)
             process.arguments = args
         } else {
             process.executableURL = claudeURL
@@ -199,7 +202,7 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         }
     }
 
-    private static func buildArgs(model: String, effort: String?, systemPrompt: String?, prompt: String, resumeSessionID: String? = nil) -> [String] {
+    private static func buildArgs(model: String, effort: String?, systemPrompt: String?, permissionMode: String? = nil, prompt: String, resumeSessionID: String? = nil) -> [String] {
         var args = [
             "-p",
             "--output-format", "stream-json",
@@ -214,6 +217,10 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
 
         if let systemPrompt, !systemPrompt.isEmpty {
             args += ["--system-prompt", systemPrompt]
+        }
+
+        if let permissionMode, !permissionMode.isEmpty, permissionMode != "default" {
+            args += ["--permission-mode", permissionMode]
         }
 
         if let resumeSessionID, !resumeSessionID.isEmpty {

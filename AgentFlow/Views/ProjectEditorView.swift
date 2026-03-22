@@ -6,6 +6,8 @@ import AFCanvas
 struct ProjectEditorView: View {
     @Environment(AppState.self) private var appState
     @Environment(ProviderRegistry.self) private var providerRegistry
+    @Binding var showNewProject: Bool
+    @Binding var sidebarVisible: Bool
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showNodePicker = false
     @State private var conversations: [UUID: ConversationState] = [:]
@@ -59,6 +61,15 @@ struct ProjectEditorView: View {
         }
         .sheet(isPresented: $showCommitSheet) {
             commitSheet
+        }
+        .sheet(isPresented: $showNewProject) {
+            NewProjectSheet { name, path in
+                appState.createProject(name: name, rootPath: path)
+                showNewProject = false
+            }
+        }
+        .onChange(of: sidebarVisible) {
+            columnVisibility = sidebarVisible ? .all : .detailOnly
         }
     }
 
@@ -122,6 +133,9 @@ struct ProjectEditorView: View {
                     onSystemPromptChange: { prompt in
                         project.nodes[node.id]?.configuration.systemPrompt = prompt
                     },
+                    onPermissionModeChange: { mode in
+                        project.nodes[node.id]?.configuration.triggerType = mode
+                    },
                     onDelete: {
                         project.removeNode(node.id)
                         conversations.removeValue(forKey: node.id)
@@ -173,6 +187,7 @@ struct ProjectEditorView: View {
         let model = node.configuration.modelID ?? "sonnet"
         let effort = node.configuration.effort ?? "high"
         let systemPrompt = node.configuration.systemPrompt
+        let permMode = node.configuration.triggerType ?? "default"
 
         let workingDir = URL(fileURLWithPath: project.project.rootPath)
 
@@ -186,6 +201,7 @@ struct ProjectEditorView: View {
             model: model,
             effort: effort,
             systemPrompt: systemPrompt,
+            permissionMode: permMode,
             workingDirectory: workingDir,
             resumeSessionID: sessionID,
             onComplete: { [weak self] in

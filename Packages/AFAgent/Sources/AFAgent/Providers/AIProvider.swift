@@ -14,6 +14,7 @@ public protocol AIProvider: Sendable {
         model: String,
         effort: String?,
         systemPrompt: String?,
+        permissionMode: String?,
         workingDirectory: URL?,
         resumeSessionID: String?
     ) -> AsyncThrowingStream<StreamEvent, Error>

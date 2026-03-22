@@ -12,14 +12,16 @@ struct AgentNodePanel: View {
     var onEffortChange: (String) -> Void
     var onCancel: () -> Void
     var onSystemPromptChange: (String) -> Void
+    var onPermissionModeChange: (String) -> Void
     var onDelete: () -> Void
 
     @State private var inputText = ""
     @State private var selectedModel: String
     @State private var selectedEffort: String
-    @State private var showSystemPrompt = false
+    @State private var showSettings = false
     @State private var isTitleHovered = false
     @State private var systemPromptText: String
+    @State private var permissionMode: String
     @FocusState private var inputFocused: Bool
 
     private let models = [
@@ -40,7 +42,8 @@ struct AgentNodePanel: View {
     init(node: WorkflowNode, isSelected: Bool, conversation: ConversationState,
          onSend: @escaping (String) -> Void, onModelChange: @escaping (String) -> Void,
          onEffortChange: @escaping (String) -> Void, onCancel: @escaping () -> Void,
-         onSystemPromptChange: @escaping (String) -> Void, onDelete: @escaping () -> Void) {
+         onSystemPromptChange: @escaping (String) -> Void, onPermissionModeChange: @escaping (String) -> Void,
+         onDelete: @escaping () -> Void) {
         self.node = node
         self.isSelected = isSelected
         self.conversation = conversation
@@ -49,10 +52,12 @@ struct AgentNodePanel: View {
         self.onEffortChange = onEffortChange
         self.onCancel = onCancel
         self.onSystemPromptChange = onSystemPromptChange
+        self.onPermissionModeChange = onPermissionModeChange
         self.onDelete = onDelete
         _selectedModel = State(initialValue: node.configuration.modelID ?? "sonnet")
         _selectedEffort = State(initialValue: node.configuration.effort ?? "high")
         _systemPromptText = State(initialValue: node.configuration.systemPrompt ?? "")
+        _permissionMode = State(initialValue: node.configuration.triggerType ?? "default")
     }
 
     var body: some View {
@@ -121,24 +126,47 @@ struct AgentNodePanel: View {
             .onChange(of: selectedEffort) { _, val in onEffortChange(val) }
 
             Button {
-                showSystemPrompt.toggle()
+                showSettings.toggle()
             } label: {
                 Image(systemName: "gear")
                     .font(.system(size: 12))
                     .foregroundColor(systemPromptText.isEmpty ? .secondary : .purple)
             }
             .buttonStyle(.plain)
-            .help("System prompt")
-            .popover(isPresented: $showSystemPrompt) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("System Prompt")
-                        .font(.system(size: 13, weight: .medium))
-                    TextEditor(text: $systemPromptText)
-                        .font(.system(size: 13))
-                        .frame(width: 340, height: 140)
-                        .onChange(of: systemPromptText) { _, val in
-                            onSystemPromptChange(val)
+            .help("Agent settings")
+            .popover(isPresented: $showSettings) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Agent Settings")
+                        .font(.system(size: 14, weight: .semibold))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Permission Mode")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Picker("", selection: $permissionMode) {
+                            Text("Default").tag("default")
+                            Text("Plan").tag("plan")
+                            Text("Auto").tag("auto")
+                            Text("Accept Edits").tag("acceptEdits")
+                            Text("Bypass All").tag("bypassPermissions")
                         }
+                        .pickerStyle(.segmented)
+                        .onChange(of: permissionMode) { _, val in
+                            onPermissionModeChange(val)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("System Prompt")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        TextEditor(text: $systemPromptText)
+                            .font(.system(size: 13))
+                            .frame(width: 380, height: 120)
+                            .onChange(of: systemPromptText) { _, val in
+                                onSystemPromptChange(val)
+                            }
+                    }
                 }
                 .padding(16)
             }
@@ -312,7 +340,50 @@ struct AgentNodePanel: View {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         inputText = ""
+
+        // Handle slash commands
+        if text.hasPrefix("/") {
+            handleSlashCommand(text)
+            return
+        }
+
         onSend(text)
+    }
+
+    private func handleSlashCommand(_ command: String) {
+        let parts = command.split(separator: " ", maxSplits: 1)
+        let cmd = String(parts[0]).lowercased()
+        let arg = parts.count > 1 ? String(parts[1]) : nil
+
+        switch cmd {
+        case "/clear":
+            conversation.messages.removeAll()
+            conversation.error = nil
+            conversation.sessionID = nil
+        case "/model":
+            if let model = arg {
+                selectedModel = model
+                onModelChange(model)
+            }
+        case "/system":
+            if let prompt = arg {
+                systemPromptText = prompt
+                onSystemPromptChange(prompt)
+            }
+        case "/effort":
+            if let effort = arg {
+                selectedEffort = effort
+                onEffortChange(effort)
+            }
+        case "/mode":
+            if let mode = arg {
+                permissionMode = mode
+                onPermissionModeChange(mode)
+            }
+        default:
+            // Unknown command — send as regular message
+            onSend(command)
+        }
     }
 }
 

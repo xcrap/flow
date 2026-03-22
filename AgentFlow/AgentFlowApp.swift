@@ -7,6 +7,8 @@ import AFCanvas
 struct AgentFlowApp: App {
     @State private var appState: AppState
     @State private var providerRegistry = ProviderRegistry()
+    @State private var showNewProject = false
+    @State private var sidebarVisible = true
 
     init() {
         let state = AppState()
@@ -16,14 +18,18 @@ struct AgentFlowApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ProjectEditorView()
+            ProjectEditorView(showNewProject: $showNewProject, sidebarVisible: $sidebarVisible)
                 .environment(appState)
                 .environment(providerRegistry)
         }
         .defaultSize(width: 1400, height: 900)
         .windowToolbarStyle(.unified(showsTitle: true))
         .commands {
-            AgentFlowCommands(appState: appState)
+            AgentFlowCommands(
+                appState: appState,
+                showNewProject: $showNewProject,
+                sidebarVisible: $sidebarVisible
+            )
         }
 
         Settings {

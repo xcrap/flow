@@ -17,6 +17,7 @@ public final class ConversationService {
         model: String,
         effort: String? = nil,
         systemPrompt: String? = nil,
+        permissionMode: String? = nil,
         workingDirectory: URL? = nil,
         resumeSessionID: String? = nil,
         onComplete: (() -> Void)? = nil
@@ -39,8 +40,9 @@ public final class ConversationService {
                 model: model,
                 effort: effort,
                 systemPrompt: systemPrompt,
+                permissionMode: permissionMode,
                 workingDirectory: workingDirectory,
-                resumeSessionID: resumeSessionID
+                resumeSessionID: resumeSessionID ?? conversationState.sessionID
             )
 
             do {
