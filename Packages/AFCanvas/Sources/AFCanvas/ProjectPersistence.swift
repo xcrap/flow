@@ -28,18 +28,27 @@ public final class ProjectPersistence {
 
     private static var isSaving = false
 
+    private static var knownProjectCount = 0
+
     public static func save(_ appState: AppState) {
-        // Prevent concurrent saves
         guard !isSaving else { return }
         isSaving = true
         defer { isSaving = false }
 
-        // Safety: never write empty if we had projects before
-        if appState.openProjects.isEmpty {
-            if FileManager.default.fileExists(atPath: saveURL.path) {
-                return // Don't overwrite with empty
-            }
+        let currentCount = appState.openProjects.count
+
+        // Safety: never save fewer projects than we know exist
+        // unless the count decreased by exactly 1 (user deleted one)
+        if currentCount < knownProjectCount && (knownProjectCount - currentCount) > 1 {
+            return // Something went wrong, don't overwrite
         }
+
+        // Never overwrite with empty
+        if currentCount == 0 && FileManager.default.fileExists(atPath: saveURL.path) {
+            return
+        }
+
+        knownProjectCount = currentCount
 
         let persisted = PersistedAppState(
             projects: appState.openProjects.map { state in
@@ -97,6 +106,7 @@ public final class ProjectPersistence {
                 return state
             }
             appState.activeProjectID = persisted.activeProjectID ?? appState.openProjects.first?.project.id
+            knownProjectCount = appState.openProjects.count
             appState.wireOnChange()
         } catch {
             print("Failed to load projects: \(error)")

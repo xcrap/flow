@@ -17,7 +17,7 @@ struct AgentFlowApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        Window("AgentFlow", id: "main") {
             ProjectEditorView(
                 sidebarVisible: $sidebarVisible,
                 showCommandPalette: $showCommandPalette
