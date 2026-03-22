@@ -8,6 +8,7 @@ struct ProjectEditorView: View {
     @Environment(ProviderRegistry.self) private var providerRegistry
     @Binding var showNewProject: Bool
     @Binding var sidebarVisible: Bool
+    @Binding var showCommandPalette: Bool
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showNodePicker = false
     @State private var conversations: [UUID: ConversationState] = [:]
@@ -16,7 +17,7 @@ struct ProjectEditorView: View {
     @State private var gitService = GitService()
     @State private var showCommitSheet = false
     @State private var commitMessage = ""
-    @AppStorage("openaiAPIKey") private var openaiAPIKey = ""
+    @State private var showCommandPalette = false
 
     private var activeProject: ProjectState? {
         appState.activeProject
@@ -27,10 +28,22 @@ struct ProjectEditorView: View {
             ProjectSidebarView()
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 300)
         } detail: {
-            if let project = activeProject {
-                canvasArea(project: project)
-            } else {
-                WelcomeView()
+            ZStack {
+                if let project = activeProject {
+                    canvasArea(project: project)
+                } else {
+                    WelcomeView()
+                }
+
+                if showCommandPalette {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .onTapGesture { showCommandPalette = false }
+
+                    CommandPaletteView(isPresented: $showCommandPalette) { action in
+                        handleCommandAction(action)
+                    }
+                }
             }
         }
         .navigationTitle(activeProject?.project.name ?? "AgentFlow")
@@ -93,9 +106,6 @@ struct ProjectEditorView: View {
         if providerRegistry.provider(for: "claude") == nil {
             providerRegistry.register(ClaudeCodeProvider())
         }
-        if !openaiAPIKey.isEmpty && providerRegistry.provider(for: "openai") == nil {
-            providerRegistry.register(OpenAIProvider(apiKey: openaiAPIKey))
-        }
         conversationService = ConversationService(registry: providerRegistry)
     }
 
@@ -137,6 +147,38 @@ struct ProjectEditorView: View {
                 }
                 .padding(12)
             }
+        }
+    }
+
+    // MARK: - Command Palette
+
+    private func handleCommandAction(_ action: CommandAction) {
+        guard let project = activeProject else { return }
+
+        switch action {
+        case .addAgent:
+            let pos = nextNodePosition(in: project, kind: .agent)
+            project.addNode(kind: .agent, title: "AI Agent", at: pos)
+        case .addTerminal:
+            let pos = nextNodePosition(in: project, kind: .terminal)
+            project.addNode(kind: .terminal, title: "Terminal", at: pos)
+        case .fitToScreen:
+            fitToScreen(project: project, viewportSize: CGSize(width: 800, height: 600))
+        case .tidyUp:
+            tidyUp(project: project, viewportSize: CGSize(width: 800, height: 600))
+        case .zoomIn:
+            project.canvasState.zoom = min(3.0, project.canvasState.zoom + 0.25)
+        case .zoomOut:
+            project.canvasState.zoom = max(0.1, project.canvasState.zoom - 0.25)
+        case .resetZoom:
+            project.canvasState.zoom = 1.0
+            project.canvasState.offset = .zero
+        case .newProject:
+            showNewProject = true
+        case .toggleSidebar:
+            NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil)
+        case .openSettings:
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
         }
     }
 
@@ -184,7 +226,13 @@ struct ProjectEditorView: View {
     }
 
     private func tidyUp(project: ProjectState, viewportSize: CGSize) {
-        let sortedNodes = project.nodes.values.sorted { $0.id.uuidString < $1.id.uuidString }
+        // Sort by creation order (position on canvas: left-to-right, top-to-bottom)
+        let sortedNodes = project.nodes.values.sorted {
+            if abs($0.position.y - $1.position.y) < 100 {
+                return $0.position.x < $1.position.x
+            }
+            return $0.position.y < $1.position.y
+        }
         guard !sortedNodes.isEmpty else { return }
 
         let gap: Double = 20

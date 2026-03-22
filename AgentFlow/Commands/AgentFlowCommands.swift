@@ -6,6 +6,7 @@ struct AgentFlowCommands: Commands {
     let appState: AppState
     @Binding var showNewProject: Bool
     @Binding var sidebarVisible: Bool
+    @Binding var showCommandPalette: Bool
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
@@ -13,6 +14,13 @@ struct AgentFlowCommands: Commands {
                 showNewProject = true
             }
             .keyboardShortcut("n", modifiers: .command)
+        }
+
+        CommandGroup(after: .newItem) {
+            Button("Command Palette") {
+                showCommandPalette.toggle()
+            }
+            .keyboardShortcut("k", modifiers: .command)
         }
 
         CommandGroup(after: .pasteboard) {

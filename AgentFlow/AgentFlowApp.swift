@@ -9,6 +9,7 @@ struct AgentFlowApp: App {
     @State private var providerRegistry = ProviderRegistry()
     @State private var showNewProject = false
     @State private var sidebarVisible = true
+    @State private var showCommandPalette = false
 
     init() {
         let state = AppState()
@@ -18,9 +19,13 @@ struct AgentFlowApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ProjectEditorView(showNewProject: $showNewProject, sidebarVisible: $sidebarVisible)
-                .environment(appState)
-                .environment(providerRegistry)
+            ProjectEditorView(
+                showNewProject: $showNewProject,
+                sidebarVisible: $sidebarVisible,
+                showCommandPalette: $showCommandPalette
+            )
+            .environment(appState)
+            .environment(providerRegistry)
         }
         .defaultSize(width: 1400, height: 900)
         .windowToolbarStyle(.unified(showsTitle: true))
@@ -28,7 +33,8 @@ struct AgentFlowApp: App {
             AgentFlowCommands(
                 appState: appState,
                 showNewProject: $showNewProject,
-                sidebarVisible: $sidebarVisible
+                sidebarVisible: $sidebarVisible,
+                showCommandPalette: $showCommandPalette
             )
         }
 
