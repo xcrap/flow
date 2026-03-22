@@ -1,0 +1,57 @@
+name: AgentFlow
+options:
+  bundleIdPrefix: com.agentflow
+  deploymentTarget:
+    macOS: "26.0"
+  xcodeVersion: "16.0"
+  defaultConfig: Debug
+  groupSortPosition: top
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+
+packages:
+  AFCore:
+    path: Packages/AFCore
+  AFCanvas:
+    path: Packages/AFCanvas
+  AFAgent:
+    path: Packages/AFAgent
+  AFTerminal:
+    path: Packages/AFTerminal
+  AFPersistence:
+    path: Packages/AFPersistence
+  AFDiff:
+    path: Packages/AFDiff
+
+targets:
+  AgentFlow:
+    type: application
+    platform: macOS
+    sources:
+      - AgentFlow
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.agentflow.app
+        PRODUCT_NAME: AgentFlow
+        INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.developer-tools"
+        INFOPLIST_KEY_CFBundleDisplayName: AgentFlow
+        GENERATE_INFOPLIST_FILE: true
+        CODE_SIGN_ENTITLEMENTS: AgentFlow/AgentFlow.entitlements
+    dependencies:
+      - package: AFCore
+      - package: AFCanvas
+      - package: AFAgent
+      - package: AFTerminal
+      - package: AFPersistence
+      - package: AFDiff
+    entitlements:
+      path: AgentFlow/AgentFlow.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+        com.apple.security.network.client: true
+        com.apple.security.files.user-selected.read-write: true
