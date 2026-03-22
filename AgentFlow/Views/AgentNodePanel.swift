@@ -93,7 +93,7 @@ struct AgentNodePanel: View {
         .frame(width: node.position.width, height: node.position.height)
         .background {
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color.black.opacity(0.35))
+                .fill(Color.black.opacity(0.22))
                 .shadow(color: .black.opacity(isSelected ? 0.3 : 0.15), radius: isSelected ? 14 : 8, y: 4)
         }
         .overlay {
@@ -284,7 +284,7 @@ struct AgentNodePanel: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(isTitleHovered ? Color.purple.opacity(0.15) : Color.white.opacity(0.06))
+        .background(isTitleHovered ? Color.purple.opacity(0.18) : Color.black.opacity(0.25))
     }
 
     // MARK: - Messages
