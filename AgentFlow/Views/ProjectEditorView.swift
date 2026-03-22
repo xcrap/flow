@@ -228,8 +228,8 @@ struct ProjectEditorView: View {
     private func nodePanel(node: WorkflowNode, isSelected: Bool, isTitleHovered: Bool, project: ProjectState) -> some View {
         switch node.kind {
         case .agent:
-            if let conversation = conversations[node.id] {
-                AgentNodePanel(
+            let conversation = conversationFor(node.id)
+            AgentNodePanel(
                     node: node,
                     isSelected: isSelected,
                     isTitleHovered: isTitleHovered,
@@ -257,22 +257,34 @@ struct ProjectEditorView: View {
                         conversations.removeValue(forKey: node.id)
                     }
                 )
-            }
 
         case .terminal:
-            if let session = terminalSessions[node.id] {
-                TerminalNodePanel(
-                    node: node,
-                    isSelected: isSelected,
-                    isTitleHovered: isTitleHovered,
-                    session: session,
-                    onDelete: {
-                        project.removeNode(node.id)
-                        terminalSessions.removeValue(forKey: node.id)
-                    }
+            let session = terminalSessionFor(node.id, rootPath: project.project.rootPath)
+            TerminalNodePanel(
+                node: node,
+                isSelected: isSelected,
+                isTitleHovered: isTitleHovered,
+                session: session,
+                onDelete: {
+                    project.removeNode(node.id)
+                    terminalSessions.removeValue(forKey: node.id)
+                }
                 )
-            }
         }
+    }
+
+    private func conversationFor(_ nodeID: UUID) -> ConversationState {
+        if let existing = conversations[nodeID] { return existing }
+        let conv = ConversationState(nodeID: nodeID)
+        conversations[nodeID] = conv
+        return conv
+    }
+
+    private func terminalSessionFor(_ nodeID: UUID, rootPath: String) -> TerminalSession {
+        if let existing = terminalSessions[nodeID] { return existing }
+        let session = TerminalSession(id: nodeID, currentDirectory: rootPath)
+        terminalSessions[nodeID] = session
+        return session
     }
 
     private func ensureSessionsExist(for project: ProjectState) {
