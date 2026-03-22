@@ -157,8 +157,8 @@ public final class CodexProvider: AIProvider, Sendable {
                         if let usage = params["tokenUsage"] as? [String: Any],
                            let total = usage["total"] as? [String: Any] {
                             self?.activeCont?.yield(.usageTotal(
-                                inputTokens: total["inputTokens"] as? Int ?? 0,
-                                outputTokens: total["outputTokens"] as? Int ?? 0
+                                totalTokens: total["totalTokens"] as? Int ?? 0,
+                                contextWindow: usage["modelContextWindow"] as? Int ?? 200_000
                             ))
                         }
                     case "item/started":

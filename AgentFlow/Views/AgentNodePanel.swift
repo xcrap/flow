@@ -373,14 +373,16 @@ struct AgentNodePanel: View {
     // MARK: - Token Bar
 
     private var contextLimit: Int {
+        // Use reported context window from provider if available
+        if let reported = conversation.reportedContextWindow, reported > 0 {
+            return reported
+        }
         let modelLimits: [String: Int] = [
             "sonnet": 200_000,
             "opus": 1_000_000,
             "haiku": 200_000,
             "claude-sonnet-4-6": 200_000,
             "claude-opus-4-6": 1_000_000,
-            "claude-sonnet-4-20250514": 200_000,
-            "claude-haiku-4-5-20251001": 200_000,
             "gpt-5.4": 200_000,
             "o3": 200_000,
             "o4-mini": 200_000,

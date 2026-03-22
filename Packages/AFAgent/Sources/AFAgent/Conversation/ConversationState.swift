@@ -63,8 +63,11 @@ public final class ConversationState {
         }
     }
 
-    public func setUsage(inputTokens: Int, outputTokens: Int) {
-        totalInputTokens = inputTokens
-        totalOutputTokens = outputTokens
+    public var reportedContextWindow: Int?
+
+    public func setUsageTotal(totalTokens: Int, contextWindow: Int) {
+        totalInputTokens = totalTokens
+        totalOutputTokens = 0
+        if contextWindow > 0 { reportedContextWindow = contextWindow }
     }
 }

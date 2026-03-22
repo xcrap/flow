@@ -55,7 +55,7 @@ public enum StreamEvent: Sendable {
     case toolUse(id: String, name: String, input: String)
     case toolResult(id: String, content: String, isError: Bool)
     case usage(inputTokens: Int, outputTokens: Int, costUSD: Double?)
-    case usageTotal(inputTokens: Int, outputTokens: Int) // replaces, not accumulates
+    case usageTotal(totalTokens: Int, contextWindow: Int) // replaces with actual values
     case done(stopReason: String)
     case error(String)
 }
