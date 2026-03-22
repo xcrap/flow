@@ -111,6 +111,7 @@ struct ProjectEditorView: View {
                 ProjectCanvasView(projectState: project) { node, isSelected, isTitleHovered in
                     nodePanel(node: node, isSelected: isSelected, isTitleHovered: isTitleHovered, project: project)
                 }
+                .id(project.project.id) // Force full recreation on project switch
 
                 // Bottom bar: minimap left, controls right
                 HStack(alignment: .bottom) {
