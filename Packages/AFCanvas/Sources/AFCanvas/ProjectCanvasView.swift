@@ -27,9 +27,13 @@ public struct ProjectCanvasView<NodeContent: View>: View {
                     }
                 )
             }
-            .contentShape(Rectangle())
-            .gesture(canvasPanGesture)
-            .gesture(canvasZoomGesture)
+            .background {
+                // Pan gesture only on empty canvas area
+                Color.clear
+                    .contentShape(Rectangle())
+                    .gesture(canvasPanGesture)
+                    .gesture(canvasZoomGesture)
+            }
             .onScrollGesture { [projectState] delta in
                 let oldZoom = projectState.canvasState.zoom
                 let factor = 1.0 + (delta.y * 0.01)
@@ -60,6 +64,7 @@ public struct ProjectCanvasView<NodeContent: View>: View {
     private var canvasPanGesture: some Gesture {
         DragGesture(minimumDistance: 5, coordinateSpace: .named("canvas"))
             .onChanged { value in
+                // Only pan when no node is being dragged
                 guard projectState.canvasState.draggedNodeID == nil else { return }
 
                 if panStart == nil {
@@ -74,8 +79,10 @@ public struct ProjectCanvasView<NodeContent: View>: View {
                 }
             }
             .onEnded { _ in
-                panStart = nil
-                projectState.onChange?()
+                if panStart != nil {
+                    panStart = nil
+                    projectState.onChange?()
+                }
             }
     }
 

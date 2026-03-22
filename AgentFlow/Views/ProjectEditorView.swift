@@ -276,14 +276,14 @@ struct ProjectEditorView: View {
     private func conversationFor(_ nodeID: UUID) -> ConversationState {
         if let existing = conversations[nodeID] { return existing }
         let conv = ConversationState(nodeID: nodeID)
-        conversations[nodeID] = conv
+        DispatchQueue.main.async { conversations[nodeID] = conv }
         return conv
     }
 
     private func terminalSessionFor(_ nodeID: UUID, rootPath: String) -> TerminalSession {
         if let existing = terminalSessions[nodeID] { return existing }
         let session = TerminalSession(id: nodeID, currentDirectory: rootPath)
-        terminalSessions[nodeID] = session
+        DispatchQueue.main.async { terminalSessions[nodeID] = session }
         return session
     }
 
