@@ -84,30 +84,16 @@ struct ProjectSidebarView: View {
 
     @ViewBuilder
     private func projectRow(_ project: ProjectState) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Label(project.project.name, systemImage: "folder.fill")
+        VStack(alignment: .leading, spacing: 4) {
+            Text(project.project.name)
+                .font(.system(size: 13, weight: .medium))
 
-            HStack(spacing: 8) {
-                Text(shortenPath(project.project.rootPath))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-
-                let agentCount = project.nodes.values.filter { $0.kind == .agent }.count
-                let terminalCount = project.nodes.values.filter { $0.kind == .terminal }.count
-
-                if agentCount > 0 {
-                    Text("\(agentCount) agent\(agentCount > 1 ? "s" : "")")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
-                }
-                if terminalCount > 0 {
-                    Text("\(terminalCount) term\(terminalCount > 1 ? "s" : "")")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
-                }
-            }
+            Text(shortenPath(project.project.rootPath))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
+        .padding(.vertical, 2)
     }
 
     private func shortenPath(_ path: String) -> String {

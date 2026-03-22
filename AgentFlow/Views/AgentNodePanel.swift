@@ -17,6 +17,7 @@ struct AgentNodePanel: View {
     var onDelete: () -> Void
 
     @State private var inputText = ""
+    @State private var selectedProvider: String
     @State private var selectedModel: String
     @State private var selectedEffort: String
     @State private var showSettings = false
@@ -24,13 +25,24 @@ struct AgentNodePanel: View {
     @State private var permissionMode: String
     @FocusState private var inputFocused: Bool
 
-    private let models = [
+    private let claudeModels = [
         ("sonnet", "Sonnet 4"),
         ("opus", "Opus 4"),
         ("haiku", "Haiku 4.5"),
         ("claude-sonnet-4-6", "Sonnet 4.6"),
         ("claude-opus-4-6", "Opus 4.6"),
     ]
+
+    private let codexModels = [
+        ("gpt-4o", "GPT-4o"),
+        ("gpt-4o-mini", "GPT-4o Mini"),
+        ("o3", "o3"),
+        ("o4-mini", "o4-mini"),
+    ]
+
+    private var currentModels: [(String, String)] {
+        selectedProvider == "codex" ? codexModels : claudeModels
+    }
 
     private let efforts = [
         ("low", "Low"),
@@ -55,6 +67,7 @@ struct AgentNodePanel: View {
         self.onSystemPromptChange = onSystemPromptChange
         self.onPermissionModeChange = onPermissionModeChange
         self.onDelete = onDelete
+        _selectedProvider = State(initialValue: node.configuration.providerID ?? "claude")
         _selectedModel = State(initialValue: node.configuration.modelID ?? "sonnet")
         _selectedEffort = State(initialValue: node.configuration.effort ?? "high")
         _systemPromptText = State(initialValue: node.configuration.systemPrompt ?? "")
@@ -107,8 +120,38 @@ struct AgentNodePanel: View {
 
             Spacer()
 
+            // Provider toggle
             Menu {
-                ForEach(models, id: \.0) { id, name in
+                Button {
+                    selectedProvider = "claude"
+                    selectedModel = "sonnet"
+                    onModelChange("sonnet")
+                    onEffortChange(selectedEffort)
+                } label: {
+                    if selectedProvider == "claude" { Label("Claude", systemImage: "checkmark") }
+                    else { Text("Claude") }
+                }
+                Button {
+                    selectedProvider = "codex"
+                    selectedModel = "gpt-4o"
+                    onModelChange("gpt-4o")
+                } label: {
+                    if selectedProvider == "codex" { Label("Codex", systemImage: "checkmark") }
+                    else { Text("Codex") }
+                }
+            } label: {
+                Text(selectedProvider == "codex" ? "Codex" : "Claude")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(selectedProvider == "codex" ? .green : .purple)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 4))
+            }
+            .menuStyle(.borderlessButton)
+
+            // Model picker
+            Menu {
+                ForEach(currentModels, id: \.0) { id, name in
                     Button {
                         selectedModel = id
                         onModelChange(id)
@@ -121,7 +164,7 @@ struct AgentNodePanel: View {
                     }
                 }
             } label: {
-                Text(models.first(where: { $0.0 == selectedModel })?.1 ?? selectedModel)
+                Text(currentModels.first(where: { $0.0 == selectedModel })?.1 ?? selectedModel)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
@@ -166,6 +209,27 @@ struct AgentNodePanel: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Agent Settings")
                         .font(.system(size: 14, weight: .semibold))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Provider")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Picker("", selection: $selectedProvider) {
+                            Text("Claude Code").tag("claude")
+                            Text("Codex (OpenAI)").tag("codex")
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: selectedProvider) { _, val in
+                            // Update provider and reset model
+                            if val == "codex" {
+                                selectedModel = "gpt-4o"
+                                onModelChange("gpt-4o")
+                            } else {
+                                selectedModel = "sonnet"
+                                onModelChange("sonnet")
+                            }
+                        }
+                    }
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Permission Mode")
@@ -310,6 +374,10 @@ struct AgentNodePanel: View {
             "claude-opus-4-6": 1_000_000,
             "claude-sonnet-4-20250514": 200_000,
             "claude-haiku-4-5-20251001": 200_000,
+            "gpt-4o": 128_000,
+            "gpt-4o-mini": 128_000,
+            "o3": 200_000,
+            "o4-mini": 200_000,
         ]
         return modelLimits[selectedModel] ?? 200_000
     }
