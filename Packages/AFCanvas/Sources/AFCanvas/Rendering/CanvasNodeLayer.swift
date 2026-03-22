@@ -12,7 +12,19 @@ public struct CanvasNodeLayer: View {
     private var visibleNodes: [WorkflowNode] {
         let viewport = projectState.canvasState.visibleRect(in: viewportSize)
         let buffered = viewport.insetBy(dx: -viewportBuffer, dy: -viewportBuffer)
-        return projectState.nodes.values.filter { node in
+
+        // Use z-order for rendering order, fallback to dict order for new nodes
+        let ordered: [UUID]
+        if projectState.nodeZOrder.isEmpty {
+            ordered = Array(projectState.nodes.keys)
+        } else {
+            // Include any nodes not yet in zOrder
+            let zSet = Set(projectState.nodeZOrder)
+            let missing = projectState.nodes.keys.filter { !zSet.contains($0) }
+            ordered = projectState.nodeZOrder + missing
+        }
+
+        return ordered.compactMap { projectState.nodes[$0] }.filter { node in
             buffered.intersects(node.position.rect)
         }
     }
@@ -92,6 +104,7 @@ public struct CanvasNodeLayer: View {
                 TapGesture()
                     .onEnded {
                         projectState.selectNode(node.id, additive: NSEvent.modifierFlags.contains(.command))
+                        projectState.bringToFront(node.id)
                     }
             )
             .contextMenu {
@@ -107,9 +120,9 @@ public struct CanvasNodeLayer: View {
                 if projectState.canvasState.draggedNodeID != nodeID {
                     projectState.canvasState.draggedNodeID = nodeID
                     projectState.canvasState.isDragging = true
-                    // Always select only this node when dragging
                     projectState.selectedNodeIDs = [nodeID]
                     projectState.selectedConnectionIDs.removeAll()
+                    projectState.bringToFront(nodeID)
                     projectState.storeDragStartPositions(for: nodeID)
                 }
 

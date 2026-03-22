@@ -14,6 +14,7 @@ struct AgentNodePanel: View {
     var onCancel: () -> Void
     var onSystemPromptChange: (String) -> Void
     var onPermissionModeChange: (String) -> Void
+    var onRename: (String) -> Void
     var onDelete: () -> Void
 
     @State private var inputText = ""
@@ -21,6 +22,8 @@ struct AgentNodePanel: View {
     @State private var selectedEffort: String
     @State private var showSettings = false
     @State private var systemPromptText: String
+    @State private var isEditingTitle = false
+    @State private var editTitle: String
     @State private var permissionMode: String
     @FocusState private var inputFocused: Bool
 
@@ -43,7 +46,7 @@ struct AgentNodePanel: View {
          onSend: @escaping (String) -> Void, onModelChange: @escaping (String) -> Void,
          onEffortChange: @escaping (String) -> Void, onCancel: @escaping () -> Void,
          onSystemPromptChange: @escaping (String) -> Void, onPermissionModeChange: @escaping (String) -> Void,
-         onDelete: @escaping () -> Void) {
+         onRename: @escaping (String) -> Void, onDelete: @escaping () -> Void) {
         self.node = node
         self.isSelected = isSelected
         self.isTitleHovered = isTitleHovered
@@ -54,7 +57,9 @@ struct AgentNodePanel: View {
         self.onCancel = onCancel
         self.onSystemPromptChange = onSystemPromptChange
         self.onPermissionModeChange = onPermissionModeChange
+        self.onRename = onRename
         self.onDelete = onDelete
+        _editTitle = State(initialValue: node.title)
         _selectedModel = State(initialValue: node.configuration.modelID ?? "sonnet")
         _selectedEffort = State(initialValue: node.configuration.effort ?? "high")
         _systemPromptText = State(initialValue: node.configuration.systemPrompt ?? "")
@@ -101,9 +106,23 @@ struct AgentNodePanel: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.purple)
 
-            Text(node.title)
-                .font(.system(size: 14, weight: .medium))
-                .lineLimit(1)
+            if isEditingTitle {
+                TextField("", text: $editTitle)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14, weight: .medium))
+                    .onSubmit {
+                        onRename(editTitle)
+                        isEditingTitle = false
+                    }
+            } else {
+                Text(node.title)
+                    .font(.system(size: 14, weight: .medium))
+                    .lineLimit(1)
+                    .onTapGesture(count: 2) {
+                        editTitle = node.title
+                        isEditingTitle = true
+                    }
+            }
 
             Spacer()
 
@@ -211,8 +230,10 @@ struct AgentNodePanel: View {
                 onDelete()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Delete node")

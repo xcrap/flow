@@ -7,6 +7,7 @@ struct PersistedProject: Codable {
     var project: Project
     var nodes: [WorkflowNode]
     var connections: [NodeConnection]
+    var nodeZOrder: [UUID]?
 }
 
 struct PersistedAppState: Codable {
@@ -36,7 +37,8 @@ public final class ProjectPersistence {
                 return PersistedProject(
                     project: project,
                     nodes: Array(state.nodes.values),
-                    connections: Array(state.connections.values)
+                    connections: Array(state.connections.values),
+                    nodeZOrder: state.nodeZOrder
                 )
             },
             activeProjectID: appState.activeProjectID
@@ -69,6 +71,7 @@ public final class ProjectPersistence {
                 for conn in p.connections {
                     state.connections[conn.id] = conn
                 }
+                state.nodeZOrder = p.nodeZOrder ?? Array(state.nodes.keys)
                 return state
             }
             appState.activeProjectID = persisted.activeProjectID ?? appState.openProjects.first?.project.id

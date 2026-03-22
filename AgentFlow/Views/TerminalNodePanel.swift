@@ -8,9 +8,12 @@ struct TerminalNodePanel: View {
     let isSelected: Bool
     let isTitleHovered: Bool
     @Bindable var session: TerminalSession
+    var onRename: (String) -> Void
     var onDelete: () -> Void
 
     @State private var inputText = ""
+    @State private var isEditingTitle = false
+    @State private var editTitle: String = ""
     @FocusState private var inputFocused: Bool
 
     var body: some View {
@@ -52,9 +55,23 @@ struct TerminalNodePanel: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.blue)
 
-            Text(node.title)
-                .font(.system(size: 14, weight: .medium))
-                .lineLimit(1)
+            if isEditingTitle {
+                TextField("", text: $editTitle)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14, weight: .medium))
+                    .onSubmit {
+                        onRename(editTitle)
+                        isEditingTitle = false
+                    }
+            } else {
+                Text(node.title)
+                    .font(.system(size: 14, weight: .medium))
+                    .lineLimit(1)
+                    .onTapGesture(count: 2) {
+                        editTitle = node.title
+                        isEditingTitle = true
+                    }
+            }
 
             Spacer()
 
@@ -84,8 +101,10 @@ struct TerminalNodePanel: View {
                 onDelete()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Delete node")

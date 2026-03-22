@@ -10,6 +10,7 @@ public final class ProjectState {
     public var selectedConnectionIDs: Set<UUID> = []
     public var nodes: [UUID: WorkflowNode] = [:]
     public var connections: [UUID: NodeConnection] = [:]
+    public var nodeZOrder: [UUID] = [] // back to front
     public var isExecuting: Bool = false
     // Drag tracking: stores initial positions when drag starts
     var dragStartPositions: [UUID: CGPoint] = [:]
@@ -33,12 +34,14 @@ public final class ProjectState {
             configuration: defaultConfiguration(for: kind)
         )
         nodes[node.id] = node
+        nodeZOrder.append(node.id)
         onChange?()
         return node
     }
 
     public func removeNode(_ id: UUID) {
         nodes.removeValue(forKey: id)
+        nodeZOrder.removeAll { $0 == id }
         let toRemove = connections.values.filter { $0.sourceNodeID == id || $0.targetNodeID == id }
         for connection in toRemove {
             connections.removeValue(forKey: connection.id)
@@ -50,6 +53,11 @@ public final class ProjectState {
     public func moveNode(_ id: UUID, to position: CGPoint) {
         nodes[id]?.position.x = position.x
         nodes[id]?.position.y = position.y
+    }
+
+    public func bringToFront(_ id: UUID) {
+        nodeZOrder.removeAll { $0 == id }
+        nodeZOrder.append(id)
     }
 
     // MARK: - Connection Operations
