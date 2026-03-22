@@ -54,7 +54,7 @@ public struct ProjectCanvasView<NodeContent: View>: View {
             .clipped()
             .coordinateSpace(name: "canvas")
         }
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var canvasPanGesture: some Gesture {

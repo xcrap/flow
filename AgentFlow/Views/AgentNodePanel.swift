@@ -73,8 +73,8 @@ struct AgentNodePanel: View {
         .frame(width: node.position.width, height: node.position.height)
         .background {
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color(nsColor: .windowBackgroundColor))
-                .shadow(color: .black.opacity(isSelected ? 0.2 : 0.1), radius: isSelected ? 12 : 6, y: 3)
+                .fill(Color(nsColor: .textBackgroundColor).opacity(0.85))
+                .shadow(color: .black.opacity(isSelected ? 0.3 : 0.15), radius: isSelected ? 14 : 8, y: 4)
         }
         .overlay {
             RoundedRectangle(cornerRadius: 14)
