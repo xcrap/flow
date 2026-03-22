@@ -84,6 +84,9 @@ struct AgentNodePanel: View {
                 )
         }
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .onChange(of: isSelected) {
+            if isSelected { inputFocused = true }
+        }
     }
 
     // MARK: - Title Bar
