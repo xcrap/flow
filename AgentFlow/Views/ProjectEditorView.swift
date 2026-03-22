@@ -16,6 +16,7 @@ struct ProjectEditorView: View {
     @State private var gitService = GitService()
     @State private var showCommitSheet = false
     @State private var commitMessage = ""
+    @AppStorage("openaiAPIKey") private var openaiAPIKey = ""
 
     private var activeProject: ProjectState? {
         appState.activeProject
@@ -83,6 +84,9 @@ struct ProjectEditorView: View {
     private func setupProviders() {
         if providerRegistry.provider(for: "claude") == nil {
             providerRegistry.register(ClaudeCodeProvider())
+        }
+        if !openaiAPIKey.isEmpty && providerRegistry.provider(for: "openai") == nil {
+            providerRegistry.register(OpenAIProvider(apiKey: openaiAPIKey))
         }
         conversationService = ConversationService(registry: providerRegistry)
     }
