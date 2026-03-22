@@ -26,24 +26,9 @@ public final class ProjectPersistence {
         return dir.appendingPathComponent("projects.json")
     }
 
-    private static var isSaving = false
-
-    private static var knownProjectCount = 0
-
     public static func save(_ appState: AppState) {
-        guard !isSaving else { return }
-        isSaving = true
-        defer { isSaving = false }
-
-        let currentCount = appState.openProjects.count
-
-        // Safety: never lose more than 1 project at a time (prevent accidental wipe)
-        if currentCount < knownProjectCount && (knownProjectCount - currentCount) > 1 {
-            return
-        }
-
-        knownProjectCount = currentCount
-
+        let names = appState.openProjects.map { $0.project.name }
+        print("[Save] \(names.count) projects: \(names.joined(separator: ", "))")
         let persisted = PersistedAppState(
             projects: appState.openProjects.map { state in
                 // Sync canvas state into project model before saving
@@ -66,13 +51,6 @@ public final class ProjectPersistence {
             encoder.outputFormatting = .prettyPrinted
             let data = try encoder.encode(persisted)
 
-            // Backup before overwriting
-            let backupURL = saveURL.deletingLastPathComponent().appendingPathComponent("projects.backup.json")
-            if FileManager.default.fileExists(atPath: saveURL.path) {
-                try? FileManager.default.removeItem(at: backupURL)
-                try? FileManager.default.copyItem(at: saveURL, to: backupURL)
-            }
-
             try data.write(to: saveURL, options: .atomic)
         } catch {
             print("Failed to save projects: \(error)")
@@ -80,6 +58,7 @@ public final class ProjectPersistence {
     }
 
     public static func load(into appState: AppState) {
+        print("[Load] from \(saveURL.path)")
         guard FileManager.default.fileExists(atPath: saveURL.path) else { return }
 
         do {
@@ -100,7 +79,6 @@ public final class ProjectPersistence {
                 return state
             }
             appState.activeProjectID = persisted.activeProjectID ?? appState.openProjects.first?.project.id
-            knownProjectCount = appState.openProjects.count
             appState.wireOnChange()
         } catch {
             print("Failed to load projects: \(error)")
