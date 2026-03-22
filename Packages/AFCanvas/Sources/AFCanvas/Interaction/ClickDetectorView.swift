@@ -16,12 +16,11 @@ struct ClickDetectorOverlay: NSViewRepresentable {
 }
 
 class ClickDetectorNSView: NSView {
-    var projectState: ProjectState?
+    weak var projectState: ProjectState?
     private var monitor: Any?
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-
         removeMonitor()
 
         guard window != nil else { return }
@@ -30,6 +29,12 @@ class ClickDetectorNSView: NSView {
             self?.handleClick(event)
             return event
         }
+    }
+
+    override func removeFromSuperview() {
+        removeMonitor()
+        projectState = nil
+        super.removeFromSuperview()
     }
 
     private func removeMonitor() {

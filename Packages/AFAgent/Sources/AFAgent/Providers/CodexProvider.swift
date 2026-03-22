@@ -155,12 +155,11 @@ public final class CodexProvider: AIProvider, Sendable {
         ])
 
         // Start reading responses
-        nonisolated(unsafe) let sessionRef = session
-        nonisolated(unsafe) let sysPrompt = systemPrompt
+        let sessionRef = session
+        let sysPrompt = systemPrompt
 
         // Use a dispatch-based handler to avoid Sendable issues
         nonisolated(unsafe) var pendingCont: AsyncThrowingStream<StreamEvent, Error>.Continuation?
-        nonisolated(unsafe) var storedThreadID: String?
 
         reader.readabilityHandler = { handle in
             let data = handle.availableData
@@ -195,7 +194,6 @@ public final class CodexProvider: AIProvider, Sendable {
                    let result = json["result"] as? [String: Any],
                    let thread = result["thread"] as? [String: Any],
                    let tid = thread["id"] as? String {
-                    storedThreadID = tid
                     Task { await sessionRef.setThreadID(tid) }
                 }
 
