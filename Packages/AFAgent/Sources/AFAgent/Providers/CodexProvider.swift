@@ -131,8 +131,17 @@ public final class CodexProvider: AIProvider, Sendable {
         process.executableURL = Self.findCodex()
         process.arguments = ["app-server"]
         process.standardInput = stdinPipe
+        let stderrPipe = Pipe()
         process.standardOutput = stdoutPipe
-        process.standardError = FileHandle.nullDevice
+        process.standardError = stderrPipe
+
+        // Log stderr for debugging
+        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            if !data.isEmpty, let text = String(data: data, encoding: .utf8) {
+                print("[Codex stderr] \(text)")
+            }
+        }
 
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = ["/opt/homebrew/bin", "/usr/local/bin", "\(NSHomeDirectory())/.local/bin", env["PATH"] ?? ""].joined(separator: ":")
@@ -278,13 +287,13 @@ public final class CodexProvider: AIProvider, Sendable {
         }
         await session.setPendingSetter(setCont)
 
-        // Wait for thread to be ready
-        for _ in 0..<50 {
+        // Wait for thread to be ready (up to 30 seconds)
+        for _ in 0..<300 {
             try await Task.sleep(for: .milliseconds(100))
             let tid = await session.threadID
             if tid != nil { return }
         }
 
-        throw NSError(domain: "CodexProvider", code: 1, userInfo: [NSLocalizedDescriptionKey: "Timeout waiting for Codex thread"])
+        throw NSError(domain: "CodexProvider", code: 1, userInfo: [NSLocalizedDescriptionKey: "Timeout waiting for Codex thread. Check your Codex login (run 'codex login' in terminal)."])
     }
 }
