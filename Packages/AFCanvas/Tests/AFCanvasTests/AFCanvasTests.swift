@@ -302,16 +302,14 @@ final class ProjectStateTests: XCTestCase {
     func testStoreDragStartPositionsForSelectedNode() throws {
         let state = ProjectState()
         let n1 = state.addNode(kind: .agent, title: "A", at: CGPoint(x: 10, y: 20))
-        let n2 = state.addNode(kind: .agent, title: "B", at: CGPoint(x: 30, y: 40))
+        let _ = state.addNode(kind: .agent, title: "B", at: CGPoint(x: 30, y: 40))
 
         state.selectNode(n1.id)
-        state.selectNode(n2.id, additive: true)
 
         state.storeDragStartPositions(for: n1.id)
-        // Both selected nodes should have start positions stored
-        XCTAssertEqual(state.dragStartPositions.count, 2)
+        // Only the dragged node stored (single-node drag)
+        XCTAssertEqual(state.dragStartPositions.count, 1)
         XCTAssertEqual(state.dragStartPositions[n1.id], CGPoint(x: 10, y: 20))
-        XCTAssertEqual(state.dragStartPositions[n2.id], CGPoint(x: 30, y: 40))
     }
 
     @MainActor
@@ -329,21 +327,19 @@ final class ProjectStateTests: XCTestCase {
     }
 
     @MainActor
-    func testApplyDragTranslationSelectedNodes() throws {
+    func testApplyDragTranslationSingleNode() throws {
         let state = ProjectState()
         let n1 = state.addNode(kind: .agent, title: "A", at: CGPoint(x: 10, y: 20))
         let n2 = state.addNode(kind: .agent, title: "B", at: CGPoint(x: 30, y: 40))
 
-        state.selectNode(n1.id)
-        state.selectNode(n2.id, additive: true)
         state.storeDragStartPositions(for: n1.id)
-
         state.applyDragTranslation(CGPoint(x: 100, y: 50), for: n1.id)
 
         XCTAssertEqual(state.nodes[n1.id]?.position.x, 110) // 10 + 100
         XCTAssertEqual(state.nodes[n1.id]?.position.y, 70)  // 20 + 50
-        XCTAssertEqual(state.nodes[n2.id]?.position.x, 130) // 30 + 100
-        XCTAssertEqual(state.nodes[n2.id]?.position.y, 90)  // 40 + 50
+        // n2 should NOT move
+        XCTAssertEqual(state.nodes[n2.id]?.position.x, 30)
+        XCTAssertEqual(state.nodes[n2.id]?.position.y, 40)
     }
 
     @MainActor

@@ -295,6 +295,9 @@ struct ProjectEditorView: View {
                     },
                     onModelChange: { model in
                         project.nodes[node.id]?.configuration.modelID = model
+                        // Auto-detect provider from model
+                        let codexModels = ["gpt-5.4", "o3", "o4-mini"]
+                        project.nodes[node.id]?.configuration.providerID = codexModels.contains(model) ? "codex" : "claude"
                     },
                     onEffortChange: { effort in
                         project.nodes[node.id]?.configuration.effort = effort
