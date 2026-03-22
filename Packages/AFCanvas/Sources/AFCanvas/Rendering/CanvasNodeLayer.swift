@@ -70,10 +70,13 @@ public struct CanvasNodeLayer: View {
 
         nodeContent(node, isSelected, isTitleHovered)
             .contentShape(Rectangle())
-            .onTapGesture {
-                projectState.selectNode(node.id)
-                projectState.bringToFront(node.id)
-            }
+            .simultaneousGesture(
+                TapGesture()
+                    .onEnded {
+                        projectState.selectNode(node.id)
+                        projectState.bringToFront(node.id)
+                    }
+            )
             .overlay(alignment: .top) {
                 HStack(spacing: 0) {
                     // Left: drag handle + hover area
@@ -118,13 +121,6 @@ public struct CanvasNodeLayer: View {
             }
             .scaleEffect(projectState.canvasState.zoom, anchor: .center)
             .position(projectState.canvasState.canvasToScreen(node.position.point))
-            .simultaneousGesture(
-                TapGesture()
-                    .onEnded {
-                        projectState.selectNode(node.id, additive: NSEvent.modifierFlags.contains(.command))
-                        projectState.bringToFront(node.id)
-                    }
-            )
             .contextMenu {
                 nodeContextMenu(for: node)
             }
