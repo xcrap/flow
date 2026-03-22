@@ -53,6 +53,8 @@ struct ProjectEditorView: View {
         .onAppear {
             setupProviders()
             if let project = activeProject {
+                // Set sidebar selection to match active project
+                appState.sidebarSelection = .project(project.project.id)
                 loadConversations(for: project)
                 ensureSessionsExist(for: project)
                 gitService.configure(rootPath: project.project.rootPath)
