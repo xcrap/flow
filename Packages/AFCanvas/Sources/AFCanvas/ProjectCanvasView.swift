@@ -31,8 +31,20 @@ public struct ProjectCanvasView<NodeContent: View>: View {
             .gesture(canvasPanGesture)
             .gesture(canvasZoomGesture)
             .onScrollGesture { [projectState] delta in
+                let oldZoom = projectState.canvasState.zoom
                 let factor = 1.0 + (delta.y * 0.01)
-                let newZoom = max(0.1, min(3.0, projectState.canvasState.zoom * factor))
+                let newZoom = max(0.1, min(3.0, oldZoom * factor))
+
+                // Zoom centered on viewport center
+                let cx = geometry.size.width / 2
+                let cy = geometry.size.height / 2
+                let offset = projectState.canvasState.offset
+
+                // Adjust offset so the canvas point under center stays fixed
+                projectState.canvasState.offset = CGPoint(
+                    x: cx - (cx - offset.x) * (newZoom / oldZoom),
+                    y: cy - (cy - offset.y) * (newZoom / oldZoom)
+                )
                 projectState.canvasState.zoom = newZoom
                 projectState.onChange?()
             }
