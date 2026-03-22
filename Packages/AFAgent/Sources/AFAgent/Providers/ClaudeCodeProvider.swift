@@ -219,13 +219,8 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
             args += ["--system-prompt", systemPrompt]
         }
 
-        if let permissionMode, !permissionMode.isEmpty {
-            if permissionMode == "bypassPermissions" {
-                args += ["--dangerously-skip-permissions"]
-            } else {
-                args += ["--permission-mode", permissionMode]
-            }
-        }
+        // In -p mode, always skip permissions since interactive approval is impossible
+        args += ["--dangerously-skip-permissions"]
 
         if let resumeSessionID, !resumeSessionID.isEmpty {
             args += ["--resume", resumeSessionID]
