@@ -31,8 +31,8 @@ public struct ProjectCanvasView<NodeContent: View>: View {
             .gesture(canvasPanGesture)
             .gesture(canvasZoomGesture)
             .onScrollGesture { [projectState] delta in
-                let zoomDelta = delta.y > 0 ? 1.05 : 0.95
-                let newZoom = max(0.1, min(3.0, projectState.canvasState.zoom * zoomDelta))
+                let factor = 1.0 + (delta.y * 0.01)
+                let newZoom = max(0.1, min(3.0, projectState.canvasState.zoom * factor))
                 projectState.canvasState.zoom = newZoom
                 projectState.onChange?()
             }
@@ -81,50 +81,31 @@ public struct ProjectCanvasView<NodeContent: View>: View {
 
 // MARK: - Scroll Wheel Modifier
 
-struct ScrollGestureModifier: ViewModifier {
+struct ScrollMonitorModifier: ViewModifier {
     let handler: (CGPoint) -> Void
+    @State private var monitor: Any?
 
     func body(content: Content) -> some View {
-        content.background {
-            ScrollWheelView(onScroll: handler)
-        }
-    }
-}
-
-struct ScrollWheelView: NSViewRepresentable {
-    let onScroll: (CGPoint) -> Void
-
-    func makeNSView(context: Context) -> ScrollWheelNSView {
-        let view = ScrollWheelNSView()
-        view.onScroll = onScroll
-        return view
-    }
-
-    func updateNSView(_ nsView: ScrollWheelNSView, context: Context) {
-        nsView.onScroll = onScroll
-    }
-}
-
-class ScrollWheelNSView: NSView {
-    var onScroll: ((CGPoint) -> Void)?
-
-    override var acceptsFirstResponder: Bool { true }
-
-    override func scrollWheel(with event: NSEvent) {
-        if event.modifierFlags.contains(.command) {
-            // Cmd + scroll = zoom (works with both mouse wheel and trackpad)
-            onScroll?(CGPoint(x: 0, y: event.scrollingDeltaY))
-        } else if event.phase == [] && event.momentumPhase == [] {
-            // Discrete mouse scroll wheel (no trackpad) = also zoom
-            onScroll?(CGPoint(x: event.scrollingDeltaX, y: event.scrollingDeltaY))
-        } else {
-            super.scrollWheel(with: event)
-        }
+        content
+            .onAppear {
+                monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+                    if event.modifierFlags.contains(.command) {
+                        handler(CGPoint(x: 0, y: event.scrollingDeltaY))
+                        return nil // consume the event
+                    }
+                    return event // pass through
+                }
+            }
+            .onDisappear {
+                if let monitor {
+                    NSEvent.removeMonitor(monitor)
+                }
+            }
     }
 }
 
 extension View {
     func onScrollGesture(handler: @escaping (CGPoint) -> Void) -> some View {
-        modifier(ScrollGestureModifier(handler: handler))
+        modifier(ScrollMonitorModifier(handler: handler))
     }
 }

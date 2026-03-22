@@ -89,7 +89,7 @@ struct TerminalNodePanel: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(isTitleHovered ? Color(nsColor: .controlBackgroundColor).opacity(0.8) : Color(nsColor: .controlBackgroundColor).opacity(0.4))
+        .background(isTitleHovered ? Color.blue.opacity(0.15) : Color.white.opacity(0.06))
     }
 
     // MARK: - Output
