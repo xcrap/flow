@@ -30,24 +30,31 @@ public struct ProjectCanvasView<NodeContent: View>: View {
             .contentShape(Rectangle())
             .gesture(canvasPanGesture)
             .gesture(canvasZoomGesture)
-            .onScrollGesture { [projectState] delta in
-                let oldZoom = projectState.canvasState.zoom
-                let factor = 1.0 + (delta.y * 0.01)
-                let newZoom = max(0.1, min(3.0, oldZoom * factor))
+            .canvasEventMonitor(
+                onZoomScroll: { [projectState] delta in
+                    let oldZoom = projectState.canvasState.zoom
+                    let factor = 1.0 + (delta.y * 0.01)
+                    let newZoom = max(0.1, min(3.0, oldZoom * factor))
 
-                // Zoom centered on viewport center
-                let cx = geometry.size.width / 2
-                let cy = geometry.size.height / 2
-                let offset = projectState.canvasState.offset
+                    let cx = geometry.size.width / 2
+                    let cy = geometry.size.height / 2
+                    let offset = projectState.canvasState.offset
 
-                // Adjust offset so the canvas point under center stays fixed
-                projectState.canvasState.offset = CGPoint(
-                    x: cx - (cx - offset.x) * (newZoom / oldZoom),
-                    y: cy - (cy - offset.y) * (newZoom / oldZoom)
-                )
-                projectState.canvasState.zoom = newZoom
-                projectState.onChange?()
-            }
+                    projectState.canvasState.offset = CGPoint(
+                        x: cx - (cx - offset.x) * (newZoom / oldZoom),
+                        y: cy - (cy - offset.y) * (newZoom / oldZoom)
+                    )
+                    projectState.canvasState.zoom = newZoom
+                    projectState.onChange?()
+                },
+                onPanDelta: { [projectState] delta in
+                    projectState.canvasState.offset.x += delta.x
+                    projectState.canvasState.offset.y += delta.y
+                },
+                onPanEnd: { [projectState] in
+                    projectState.onChange?()
+                }
+            )
             .onTapGesture {
                 projectState.deselectAll()
             }
@@ -96,31 +103,71 @@ public struct ProjectCanvasView<NodeContent: View>: View {
 
 // MARK: - Scroll Wheel Modifier
 
-struct ScrollMonitorModifier: ViewModifier {
-    let handler: (CGPoint) -> Void
-    @State private var monitor: Any?
+struct CanvasEventMonitor: ViewModifier {
+    let onZoomScroll: (CGPoint) -> Void
+    let onPanDelta: (CGPoint) -> Void
+    let onPanEnd: () -> Void
+    @State private var scrollMonitor: Any?
+    @State private var dragMonitor: Any?
+    @State private var dragUpMonitor: Any?
+    @State private var isPanning = false
+    @State private var lastDragPoint: NSPoint?
 
     func body(content: Content) -> some View {
         content
             .onAppear {
-                monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+                scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
                     if event.modifierFlags.contains(.command) {
-                        handler(CGPoint(x: 0, y: event.scrollingDeltaY))
-                        return nil // consume the event
+                        onZoomScroll(CGPoint(x: 0, y: event.scrollingDeltaY))
+                        return nil
                     }
-                    return event // pass through
+                    return event
+                }
+
+                dragMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDragged]) { event in
+                    if event.modifierFlags.contains(.option) {
+                        let delta = CGPoint(x: event.deltaX, y: -event.deltaY)
+                        onPanDelta(delta)
+                        isPanning = true
+                        return nil // consume
+                    }
+                    return event
+                }
+
+                dragUpMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseUp]) { event in
+                    if isPanning {
+                        isPanning = false
+                        onPanEnd()
+                    }
+                    return event
                 }
             }
             .onDisappear {
-                if let monitor {
-                    NSEvent.removeMonitor(monitor)
-                }
+                if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor) }
+                if let dragMonitor { NSEvent.removeMonitor(dragMonitor) }
+                if let dragUpMonitor { NSEvent.removeMonitor(dragUpMonitor) }
             }
     }
 }
 
 extension View {
     func onScrollGesture(handler: @escaping (CGPoint) -> Void) -> some View {
-        modifier(ScrollMonitorModifier(handler: handler))
+        modifier(CanvasEventMonitor(
+            onZoomScroll: handler,
+            onPanDelta: { _ in },
+            onPanEnd: { }
+        ))
+    }
+
+    func canvasEventMonitor(
+        onZoomScroll: @escaping (CGPoint) -> Void,
+        onPanDelta: @escaping (CGPoint) -> Void,
+        onPanEnd: @escaping () -> Void
+    ) -> some View {
+        modifier(CanvasEventMonitor(
+            onZoomScroll: onZoomScroll,
+            onPanDelta: onPanDelta,
+            onPanEnd: onPanEnd
+        ))
     }
 }
