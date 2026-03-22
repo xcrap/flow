@@ -41,9 +41,20 @@ public struct CanvasNodeLayer: View {
         self.nodeContent = nodeContent
     }
 
+    @State private var clickMonitor: Any?
+
     public var body: some View {
         ForEach(visibleNodes) { node in
             nodePanel(node)
+        }
+        .onAppear {
+            clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
+                handleClick(event)
+                return event
+            }
+        }
+        .onDisappear {
+            if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
         }
         .alert("Rename", isPresented: Binding(
             get: { renamingNodeID != nil },
@@ -69,14 +80,6 @@ public struct CanvasNodeLayer: View {
         let isTitleHovered = hoveredNodeID == node.id
 
         nodeContent(node, isSelected, isTitleHovered)
-            .contentShape(Rectangle())
-            .simultaneousGesture(
-                TapGesture()
-                    .onEnded {
-                        projectState.selectNode(node.id)
-                        projectState.bringToFront(node.id)
-                    }
-            )
             .overlay(alignment: .top) {
                 HStack(spacing: 0) {
                     // Left: drag handle + hover area
@@ -259,6 +262,45 @@ public struct CanvasNodeLayer: View {
                 projectState.canvasState.draggedNodeID = nil
                 projectState.clearDragStartPositions()
             }
+    }
+
+    private func handleClick(_ event: NSEvent) {
+        guard let window = event.window else { return }
+
+        // Convert window coordinates to screen-relative for the content area
+        let windowPoint = event.locationInWindow
+        // Flip Y (AppKit is bottom-up, our canvas is top-down)
+        let flippedY = window.contentView?.bounds.height ?? 0 - windowPoint.y
+
+        // Check each node (in reverse z-order so topmost wins)
+        let zoom = projectState.canvasState.zoom
+        let orderedIDs = projectState.nodeZOrder.isEmpty ? Array(projectState.nodes.keys) : projectState.nodeZOrder
+
+        for nodeID in orderedIDs.reversed() {
+            guard let node = projectState.nodes[nodeID] else { continue }
+
+            let screenCenter = projectState.canvasState.canvasToScreen(node.position.point)
+            let halfW = (node.position.width * zoom) / 2
+            let halfH = (node.position.height * zoom) / 2
+
+            let nodeScreenRect = CGRect(
+                x: screenCenter.x - halfW,
+                y: screenCenter.y - halfH,
+                width: halfW * 2,
+                height: halfH * 2
+            )
+
+            // Use the raw window point (approximate — good enough for selection)
+            let testPoint = CGPoint(x: windowPoint.x, y: flippedY)
+
+            if nodeScreenRect.contains(testPoint) {
+                if !projectState.selectedNodeIDs.contains(nodeID) {
+                    projectState.selectNode(nodeID)
+                    projectState.bringToFront(nodeID)
+                }
+                return
+            }
+        }
     }
 
     @ViewBuilder
