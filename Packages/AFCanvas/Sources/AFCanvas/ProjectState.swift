@@ -116,34 +116,15 @@ public final class ProjectState {
 
     public func storeDragStartPositions(for nodeID: UUID) {
         dragStartPositions.removeAll()
-        if selectedNodeIDs.contains(nodeID) {
-            // Store start positions for all selected nodes
-            for id in selectedNodeIDs {
-                if let node = nodes[id] {
-                    dragStartPositions[id] = node.position.point
-                }
-            }
-        } else {
-            // Only store for this single node
-            if let node = nodes[nodeID] {
-                dragStartPositions[nodeID] = node.position.point
-            }
+        if let node = nodes[nodeID] {
+            dragStartPositions[nodeID] = node.position.point
         }
     }
 
     public func applyDragTranslation(_ translation: CGPoint, for nodeID: UUID) {
-        if selectedNodeIDs.contains(nodeID) {
-            for id in selectedNodeIDs {
-                if let start = dragStartPositions[id] {
-                    nodes[id]?.position.x = start.x + translation.x
-                    nodes[id]?.position.y = start.y + translation.y
-                }
-            }
-        } else {
-            if let start = dragStartPositions[nodeID] {
-                nodes[nodeID]?.position.x = start.x + translation.x
-                nodes[nodeID]?.position.y = start.y + translation.y
-            }
+        if let start = dragStartPositions[nodeID] {
+            nodes[nodeID]?.position.x = start.x + translation.x
+            nodes[nodeID]?.position.y = start.y + translation.y
         }
     }
 

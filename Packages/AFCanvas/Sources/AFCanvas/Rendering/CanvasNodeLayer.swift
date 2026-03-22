@@ -45,7 +45,7 @@ public struct CanvasNodeLayer: View {
                     Color.clear
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(Rectangle())
-                        .gesture(nodeDragGesture(for: node.id))
+                        .highPriorityGesture(nodeDragGesture(for: node.id))
 
                     // Right: not interactive (pickers underneath handle clicks)
                     Color.clear
