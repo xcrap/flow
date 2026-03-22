@@ -154,7 +154,7 @@ public final class ProjectState {
     private func defaultConfiguration(for kind: NodeKind) -> NodeConfiguration {
         switch kind {
         case .agent:
-            return NodeConfiguration(providerID: "claude", modelID: "sonnet")
+            return NodeConfiguration(providerID: "claude", modelID: "sonnet", triggerType: "auto")
         case .terminal:
             return NodeConfiguration(language: "bash")
         }

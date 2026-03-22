@@ -62,4 +62,9 @@ public final class ConversationState {
             totalCostUSD += cost
         }
     }
+
+    public func setUsage(inputTokens: Int, outputTokens: Int) {
+        totalInputTokens = inputTokens
+        totalOutputTokens = outputTokens
+    }
 }

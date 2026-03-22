@@ -84,6 +84,9 @@ public final class ConversationService {
                             costUSD: costUSD
                         )
 
+                    case .usageTotal(let inputTokens, let outputTokens):
+                        conversationState.setUsage(inputTokens: inputTokens, outputTokens: outputTokens)
+
                     case .done:
                         conversationState.finishStreaming()
 

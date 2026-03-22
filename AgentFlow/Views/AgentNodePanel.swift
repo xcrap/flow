@@ -78,7 +78,7 @@ struct AgentNodePanel: View {
         _selectedModel = State(initialValue: finalModel)
         _selectedEffort = State(initialValue: node.configuration.effort ?? "high")
         _systemPromptText = State(initialValue: node.configuration.systemPrompt ?? "")
-        _permissionMode = State(initialValue: node.configuration.triggerType ?? "default")
+        _permissionMode = State(initialValue: node.configuration.triggerType ?? "auto")
     }
 
     var body: some View {

@@ -213,17 +213,18 @@ public final class CodexProvider: AIProvider, Sendable {
                     case "thread/tokenUsage/updated":
                         if let usage = params["tokenUsage"] as? [String: Any],
                            let total = usage["total"] as? [String: Any] {
-                            pendingCont?.yield(.usage(
+                            pendingCont?.yield(.usageTotal(
                                 inputTokens: total["inputTokens"] as? Int ?? 0,
-                                outputTokens: total["outputTokens"] as? Int ?? 0,
-                                costUSD: nil
+                                outputTokens: total["outputTokens"] as? Int ?? 0
                             ))
                         }
                     case "item/started":
                         if let item = params["item"] as? [String: Any],
-                           let type = item["type"] as? String, type == "toolCall",
-                           let name = item["name"] as? String {
-                            pendingCont?.yield(.toolUse(id: item["id"] as? String ?? "", name: name, input: ""))
+                           let type = item["type"] as? String {
+                            if type == "toolCall" {
+                                let name = item["name"] as? String ?? ""
+                                pendingCont?.yield(.toolUse(id: item["id"] as? String ?? "", name: name, input: ""))
+                            }
                         }
                     default:
                         break

@@ -219,8 +219,12 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
             args += ["--system-prompt", systemPrompt]
         }
 
-        if let permissionMode, !permissionMode.isEmpty, permissionMode != "default" {
-            args += ["--permission-mode", permissionMode]
+        if let permissionMode, !permissionMode.isEmpty {
+            if permissionMode == "bypassPermissions" {
+                args += ["--dangerously-skip-permissions"]
+            } else {
+                args += ["--permission-mode", permissionMode]
+            }
         }
 
         if let resumeSessionID, !resumeSessionID.isEmpty {

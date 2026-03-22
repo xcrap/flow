@@ -384,7 +384,7 @@ struct ProjectEditorView: View {
         let model = node.configuration.modelID ?? "sonnet"
         let effort = node.configuration.effort ?? "high"
         let systemPrompt = node.configuration.systemPrompt
-        let permMode = node.configuration.triggerType ?? "default"
+        let permMode = node.configuration.triggerType ?? "auto"
 
         let workingDir = URL(fileURLWithPath: project.project.rootPath)
 
