@@ -37,12 +37,15 @@ struct ProjectEditorView: View {
         .onAppear {
             setupProviders()
             if let project = activeProject {
+                loadConversations(for: project)
                 ensureSessionsExist(for: project)
                 gitService.configure(rootPath: project.project.rootPath)
             }
         }
         .onChange(of: appState.activeProjectID) {
+            // Save conversations for previous project, load for new one
             if let project = activeProject {
+                loadConversations(for: project)
                 ensureSessionsExist(for: project)
                 gitService.configure(rootPath: project.project.rootPath)
             }
@@ -173,6 +176,9 @@ struct ProjectEditorView: View {
 
         let workingDir = URL(fileURLWithPath: project.project.rootPath)
 
+        // Use --resume if we have a session ID from a previous conversation
+        let sessionID = conversation.sessionID
+
         service.send(
             prompt: text,
             to: conversation,
@@ -180,8 +186,28 @@ struct ProjectEditorView: View {
             model: model,
             effort: effort,
             systemPrompt: systemPrompt,
-            workingDirectory: workingDir
+            workingDirectory: workingDir,
+            resumeSessionID: sessionID,
+            onComplete: { [weak self] in
+                Task { @MainActor in
+                    self?.saveConversations()
+                }
+            }
         )
+    }
+
+    // MARK: - Conversation Persistence
+
+    private func loadConversations(for project: ProjectState) {
+        let loaded = ConversationPersistence.load(for: project.project.id)
+        for (id, conv) in loaded {
+            conversations[id] = conv
+        }
+    }
+
+    private func saveConversations() {
+        guard let project = activeProject else { return }
+        ConversationPersistence.save(conversations: conversations, for: project.project.id)
     }
 
     // MARK: - Node Positioning

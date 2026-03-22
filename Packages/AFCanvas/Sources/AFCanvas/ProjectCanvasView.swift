@@ -30,11 +30,11 @@ public struct ProjectCanvasView<NodeContent: View>: View {
             .contentShape(Rectangle())
             .gesture(canvasPanGesture)
             .gesture(canvasZoomGesture)
-            .onScrollGesture { delta in
-                // Scroll wheel zoom
+            .onScrollGesture { [projectState] delta in
                 let zoomDelta = delta.y > 0 ? 1.05 : 0.95
                 let newZoom = max(0.1, min(3.0, projectState.canvasState.zoom * zoomDelta))
                 projectState.canvasState.zoom = newZoom
+                projectState.onChange?()
             }
             .onTapGesture {
                 projectState.deselectAll()
@@ -63,6 +63,7 @@ public struct ProjectCanvasView<NodeContent: View>: View {
             }
             .onEnded { _ in
                 panStart = nil
+                projectState.onChange?()
             }
     }
 
@@ -71,6 +72,9 @@ public struct ProjectCanvasView<NodeContent: View>: View {
             .onChanged { value in
                 let newZoom = max(0.1, min(3.0, projectState.canvasState.zoom * value.magnification))
                 projectState.canvasState.zoom = newZoom
+            }
+            .onEnded { _ in
+                projectState.onChange?()
             }
     }
 }

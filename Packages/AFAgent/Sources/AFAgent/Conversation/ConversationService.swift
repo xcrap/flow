@@ -17,9 +17,10 @@ public final class ConversationService {
         model: String,
         effort: String? = nil,
         systemPrompt: String? = nil,
-        workingDirectory: URL? = nil
+        workingDirectory: URL? = nil,
+        resumeSessionID: String? = nil,
+        onComplete: (() -> Void)? = nil
     ) {
-        // Cancel any existing streaming for this conversation
         cancelStreaming(for: conversationState.nodeID)
 
         conversationState.appendUserMessage(prompt)
@@ -27,6 +28,7 @@ public final class ConversationService {
 
         guard let provider = registry.provider(for: providerID) else {
             conversationState.setError("Provider '\(providerID)' not found. Configure it in Settings.")
+            onComplete?()
             return
         }
 
@@ -37,7 +39,8 @@ public final class ConversationService {
                 model: model,
                 effort: effort,
                 systemPrompt: systemPrompt,
-                workingDirectory: workingDirectory
+                workingDirectory: workingDirectory,
+                resumeSessionID: resumeSessionID
             )
 
             do {
@@ -59,7 +62,6 @@ public final class ConversationService {
                             role: .assistant,
                             content: [.toolUse(id: id, name: name, input: input)]
                         )
-                        // Commit any streaming text first
                         if !conversationState.streamingText.isEmpty {
                             conversationState.finishStreaming()
                             conversationState.startStreaming()
@@ -95,6 +97,7 @@ public final class ConversationService {
 
             conversationState.finishStreaming()
             activeTasks[conversationState.nodeID] = nil
+            onComplete?()
         }
 
         activeTasks[conversationState.nodeID] = task

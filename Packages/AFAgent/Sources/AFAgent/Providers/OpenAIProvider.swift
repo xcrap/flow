@@ -34,7 +34,8 @@ public final class OpenAIProvider: AIProvider, Sendable {
         model: String,
         effort: String?,
         systemPrompt: String?,
-        workingDirectory: URL?
+        workingDirectory: URL?,
+        resumeSessionID: String?
     ) -> AsyncThrowingStream<StreamEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {

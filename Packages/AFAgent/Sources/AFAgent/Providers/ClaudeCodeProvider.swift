@@ -31,7 +31,8 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         model: String,
         effort: String?,
         systemPrompt: String?,
-        workingDirectory: URL?
+        workingDirectory: URL?,
+        resumeSessionID: String?
     ) -> AsyncThrowingStream<StreamEvent, Error> {
         AsyncThrowingStream { continuation in
             Task {
@@ -42,6 +43,7 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
                         effort: effort,
                         systemPrompt: systemPrompt,
                         workingDirectory: workingDirectory,
+                        resumeSessionID: resumeSessionID,
                         continuation: continuation
                     )
                 } catch {
@@ -111,6 +113,7 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         effort: String?,
         systemPrompt: String?,
         workingDirectory: URL?,
+        resumeSessionID: String?,
         continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
     ) async throws {
         let claudeURL = Self.findClaude()
@@ -121,11 +124,11 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         if claudeURL.path == "/usr/bin/env" {
             process.executableURL = claudeURL
             var args = ["claude"]
-            args += Self.buildArgs(model: model, effort: effort, systemPrompt: systemPrompt, prompt: prompt)
+            args += Self.buildArgs(model: model, effort: effort, systemPrompt: systemPrompt, prompt: prompt, resumeSessionID: resumeSessionID)
             process.arguments = args
         } else {
             process.executableURL = claudeURL
-            process.arguments = Self.buildArgs(model: model, effort: effort, systemPrompt: systemPrompt, prompt: prompt)
+            process.arguments = Self.buildArgs(model: model, effort: effort, systemPrompt: systemPrompt, prompt: prompt, resumeSessionID: resumeSessionID)
         }
 
         // Ensure PATH includes common locations
@@ -196,7 +199,7 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         }
     }
 
-    private static func buildArgs(model: String, effort: String?, systemPrompt: String?, prompt: String) -> [String] {
+    private static func buildArgs(model: String, effort: String?, systemPrompt: String?, prompt: String, resumeSessionID: String? = nil) -> [String] {
         var args = [
             "-p",
             "--output-format", "stream-json",
@@ -211,6 +214,10 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
 
         if let systemPrompt, !systemPrompt.isEmpty {
             args += ["--system-prompt", systemPrompt]
+        }
+
+        if let resumeSessionID, !resumeSessionID.isEmpty {
+            args += ["--resume", resumeSessionID]
         }
 
         args.append(prompt)

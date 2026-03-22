@@ -38,9 +38,9 @@ public struct CanvasNodeLayer: View {
 
         nodeContent(node, isSelected)
             .overlay(alignment: .topLeading) {
-                // Drag handle on left side of title bar only (avoids overlapping pickers)
+                // Drag handle covers title area (left 60%), right side has pickers
                 Color.clear
-                    .frame(width: max(0, (node.position.width) * 0.5), height: 36)
+                    .frame(width: max(0, node.position.width * 0.55), height: 40)
                     .contentShape(Rectangle())
                     .gesture(nodeDragGesture(for: node.id))
             }

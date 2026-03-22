@@ -14,7 +14,8 @@ public protocol AIProvider: Sendable {
         model: String,
         effort: String?,
         systemPrompt: String?,
-        workingDirectory: URL?
+        workingDirectory: URL?,
+        resumeSessionID: String?
     ) -> AsyncThrowingStream<StreamEvent, Error>
 
     func cancel() async
