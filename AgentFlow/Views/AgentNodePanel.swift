@@ -66,8 +66,16 @@ struct AgentNodePanel: View {
         self.onSystemPromptChange = onSystemPromptChange
         self.onPermissionModeChange = onPermissionModeChange
         self.onDelete = onDelete
-        _selectedProvider = State(initialValue: node.configuration.providerID ?? "claude")
-        _selectedModel = State(initialValue: node.configuration.modelID ?? "sonnet")
+        let provider = node.configuration.providerID ?? "claude"
+        let modelID = node.configuration.modelID ?? (provider == "codex" ? "gpt-5.4" : "sonnet")
+        // Validate model belongs to provider
+        let validModels = provider == "codex"
+            ? [("gpt-5.4", ""), ("o3", ""), ("o4-mini", "")]
+            : [("sonnet", ""), ("opus", ""), ("haiku", ""), ("claude-sonnet-4-6", ""), ("claude-opus-4-6", "")]
+        let finalModel = validModels.contains(where: { $0.0 == modelID }) ? modelID : (provider == "codex" ? "gpt-5.4" : "sonnet")
+
+        _selectedProvider = State(initialValue: provider)
+        _selectedModel = State(initialValue: finalModel)
         _selectedEffort = State(initialValue: node.configuration.effort ?? "high")
         _systemPromptText = State(initialValue: node.configuration.systemPrompt ?? "")
         _permissionMode = State(initialValue: node.configuration.triggerType ?? "default")
