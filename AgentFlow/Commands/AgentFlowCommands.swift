@@ -71,15 +71,14 @@ struct AgentFlowCommands: Commands {
 
         for id in selectedIDs {
             guard let node = project.nodes[id] else { continue }
-            let size = WorkflowNode.defaultSize(for: node.kind)
             let newNode = WorkflowNode(
                 kind: node.kind,
                 title: "\(node.title) Copy",
                 position: NodePosition(
                     x: node.position.x + 50,
                     y: node.position.y + 50,
-                    width: size.width,
-                    height: size.height
+                    width: node.position.width,
+                    height: node.position.height
                 ),
                 configuration: node.configuration
             )
