@@ -63,10 +63,18 @@ struct ProjectEditorView: View {
         .sheet(isPresented: $showCommitSheet) {
             commitSheet
         }
-        .sheet(isPresented: $showNewProject) {
-            NewProjectSheet { name, path in
-                appState.createProject(name: name, rootPath: path)
+        .onChange(of: showNewProject) {
+            if showNewProject {
                 showNewProject = false
+                let panel = NSOpenPanel()
+                panel.canChooseFiles = false
+                panel.canChooseDirectories = true
+                panel.allowsMultipleSelection = false
+                panel.message = "Choose the root folder for your project"
+                panel.prompt = "Select Folder"
+                if panel.runModal() == .OK, let url = panel.url {
+                    appState.createProject(name: url.lastPathComponent, rootPath: url.path)
+                }
             }
         }
         .onChange(of: sidebarVisible) {
@@ -96,9 +104,19 @@ struct ProjectEditorView: View {
     @ViewBuilder
     private func canvasArea(project: ProjectState) -> some View {
         GeometryReader { geo in
-            ZStack(alignment: .bottomTrailing) {
+            ZStack {
                 ProjectCanvasView(projectState: project) { node, isSelected, isTitleHovered in
                     nodePanel(node: node, isSelected: isSelected, isTitleHovered: isTitleHovered, project: project)
+                }
+
+                // Minimap bottom-left
+                VStack {
+                    Spacer()
+                    HStack {
+                        CanvasMinimapView(projectState: project, viewportSize: geo.size)
+                            .padding(12)
+                        Spacer()
+                    }
                 }
 
                 // Canvas controls

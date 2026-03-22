@@ -4,7 +4,6 @@ import AFCanvas
 
 struct ProjectSidebarView: View {
     @Environment(AppState.self) private var appState
-    @State private var showNewProject = false
 
     var body: some View {
         @Bindable var appState = appState
@@ -33,7 +32,7 @@ struct ProjectSidebarView: View {
         }
         .safeAreaInset(edge: .bottom) {
             Button {
-                showNewProject = true
+                addProject()
             } label: {
                 Label("New Project", systemImage: "plus")
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -42,11 +41,18 @@ struct ProjectSidebarView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
         }
-        .sheet(isPresented: $showNewProject) {
-            NewProjectSheet { name, path in
-                appState.createProject(name: name, rootPath: path)
-                showNewProject = false
-            }
+    }
+
+    private func addProject() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose the root folder for your project"
+        panel.prompt = "Select Folder"
+
+        if panel.runModal() == .OK, let url = panel.url {
+            appState.createProject(name: url.lastPathComponent, rootPath: url.path)
         }
     }
 
@@ -70,78 +76,3 @@ struct ProjectSidebarView: View {
     }
 }
 
-// MARK: - New Project Sheet
-
-struct NewProjectSheet: View {
-    var onCreate: (String, String) -> Void
-
-    @State private var name = ""
-    @State private var selectedPath = ""
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("New Project")
-                .font(.headline)
-
-            Form {
-                TextField("Name", text: $name)
-
-                HStack {
-                    Text(selectedPath.isEmpty ? "No folder selected" : shortenPath(selectedPath))
-                        .foregroundStyle(selectedPath.isEmpty ? .tertiary : .primary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-
-                    Spacer()
-
-                    Button("Choose...") {
-                        pickFolder()
-                    }
-                }
-            }
-            .formStyle(.grouped)
-
-            HStack {
-                Button("Cancel") {
-                    dismiss()
-                }
-                .keyboardShortcut(.cancelAction)
-
-                Spacer()
-
-                Button("Create") {
-                    let projectName = name.isEmpty ? URL(fileURLWithPath: selectedPath).lastPathComponent : name
-                    onCreate(projectName, selectedPath)
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(selectedPath.isEmpty)
-            }
-        }
-        .padding(20)
-        .frame(width: 400)
-    }
-
-    private func pickFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.message = "Choose the root folder for your project"
-
-        if panel.runModal() == .OK, let url = panel.url {
-            selectedPath = url.path
-            if name.isEmpty {
-                name = url.lastPathComponent
-            }
-        }
-    }
-
-    private func shortenPath(_ path: String) -> String {
-        let home = NSHomeDirectory()
-        if path.hasPrefix(home) {
-            return "~" + path.dropFirst(home.count)
-        }
-        return path
-    }
-}
