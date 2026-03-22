@@ -13,7 +13,6 @@ struct ProjectEditorView: View {
     @State private var conversations: [UUID: ConversationState] = [:]
     @State private var terminalSessions: [UUID: TerminalSession] = [:]
     @State private var conversationService: ConversationService?
-    @State private var conversationsLoaded = false
     @State private var gitService = GitService()
     @State private var showCommitSheet = false
     @State private var commitMessage = ""
@@ -327,28 +326,14 @@ struct ProjectEditorView: View {
     private func conversationFor(_ nodeID: UUID) -> ConversationState {
         if let existing = conversations[nodeID] { return existing }
         let conv = ConversationState(nodeID: nodeID)
-        // Only persist if we've already loaded (otherwise we'd overwrite saved data)
-        if conversationsLoaded {
-            DispatchQueue.main.async { [self] in
-                // Double check it wasn't loaded in the meantime
-                if conversations[nodeID] == nil {
-                    conversations[nodeID] = conv
-                }
-            }
-        }
+        conversations[nodeID] = conv
         return conv
     }
 
     private func terminalSessionFor(_ nodeID: UUID, rootPath: String) -> TerminalSession {
         if let existing = terminalSessions[nodeID] { return existing }
         let session = TerminalSession(id: nodeID, currentDirectory: rootPath)
-        if conversationsLoaded {
-            DispatchQueue.main.async { [self] in
-                if terminalSessions[nodeID] == nil {
-                    terminalSessions[nodeID] = session
-                }
-            }
-        }
+        terminalSessions[nodeID] = session
         return session
     }
 
@@ -420,7 +405,6 @@ struct ProjectEditorView: View {
         for (id, session) in loadedTerms {
             terminalSessions[id] = session
         }
-        conversationsLoaded = true
     }
 
     private func saveConversations() {
