@@ -187,22 +187,24 @@ struct ProjectEditorView: View {
         let sortedNodes = project.nodes.values.sorted { $0.id.uuidString < $1.id.uuidString }
         guard !sortedNodes.isEmpty else { return }
 
+        // Find the max width and height across all nodes for uniform grid
+        let maxW = sortedNodes.map(\.position.width).max() ?? 560
+        let maxH = sortedNodes.map(\.position.height).max() ?? 680
+        let gap: Double = 60
+
         let columns = max(1, Int(ceil(sqrt(Double(sortedNodes.count)))))
-        let spacingX: Double = 40
-        let spacingY: Double = 40
 
         withAnimation(.spring(duration: 0.5)) {
             for (index, node) in sortedNodes.enumerated() {
                 let col = index % columns
                 let row = index / columns
-                let x = Double(col) * (node.position.width + spacingX) + node.position.width / 2
-                let y = Double(row) * (node.position.height + spacingY) + node.position.height / 2
+                let x = Double(col) * (maxW + gap) + maxW / 2
+                let y = Double(row) * (maxH + gap) + maxH / 2
                 project.nodes[node.id]?.position.x = x
                 project.nodes[node.id]?.position.y = y
             }
         }
 
-        // After tidy, fit to screen
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             fitToScreen(project: project, viewportSize: viewportSize)
         }
