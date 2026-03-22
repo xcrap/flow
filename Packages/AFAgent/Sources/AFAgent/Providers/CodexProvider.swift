@@ -188,7 +188,6 @@ public final class CodexProvider: AIProvider, Sendable {
                 if let respID = json["id"] as? Int, respID == 0 {
                     var threadParams: [String: Any] = [
                         "approvalPolicy": "never",
-                        "sandbox": ["type": "dangerFullAccess", "access": ["type": "fullAccess"], "networkAccess": true],
                     ]
                     if let sp = sysPrompt, !sp.isEmpty {
                         threadParams["developerInstructions"] = sp
