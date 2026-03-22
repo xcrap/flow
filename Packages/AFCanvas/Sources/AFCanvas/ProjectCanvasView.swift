@@ -55,9 +55,6 @@ public struct ProjectCanvasView<NodeContent: View>: View {
                     projectState.onChange?()
                 }
             )
-            .onTapGesture {
-                projectState.deselectAll()
-            }
             .clipped()
             .coordinateSpace(name: "canvas")
         }
