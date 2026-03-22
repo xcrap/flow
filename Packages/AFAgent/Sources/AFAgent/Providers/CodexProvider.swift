@@ -177,7 +177,10 @@ public final class CodexProvider: AIProvider, Sendable {
 
                 // Response to initialize (id: 0)
                 if let respID = json["id"] as? Int, respID == 0 {
-                    var threadParams: [String: Any] = [:]
+                    var threadParams: [String: Any] = [
+                        "approvalPolicy": "never",
+                        "sandbox": ["type": "dangerFullAccess", "access": ["type": "fullAccess"], "networkAccess": true],
+                    ]
                     if let sp = sysPrompt, !sp.isEmpty {
                         threadParams["developerInstructions"] = sp
                     }
@@ -221,13 +224,44 @@ public final class CodexProvider: AIProvider, Sendable {
                     case "item/started":
                         if let item = params["item"] as? [String: Any],
                            let type = item["type"] as? String {
-                            if type == "toolCall" {
-                                let name = item["name"] as? String ?? ""
+                            if type == "toolCall" || type == "commandExecution" {
+                                let name = item["name"] as? String ?? item["command"] as? String ?? type
                                 pendingCont?.yield(.toolUse(id: item["id"] as? String ?? "", name: name, input: ""))
                             }
                         }
                     default:
                         break
+                    }
+                }
+
+                // Handle SERVER REQUESTS (need a response) — auto-approve
+                if let reqID = json["id"], let method = json["method"] as? String {
+                    let approvalMethods = [
+                        "item/commandExecution/requestApproval",
+                        "item/fileChange/requestApproval",
+                        "item/permissions/requestApproval",
+                        "applyPatchApproval",
+                        "execCommandApproval",
+                        "item/tool/call",
+                    ]
+
+                    if approvalMethods.contains(method) {
+                        // Auto-approve by sending a response
+                        let response: [String: Any] = [
+                            "jsonrpc": "2.0",
+                            "id": reqID,
+                            "result": ["approved": true, "behavior": "allow"]
+                        ]
+                        if let d = try? JSONSerialization.data(withJSONObject: response),
+                           var s = String(data: d, encoding: .utf8) {
+                            s += "\n"
+                            writer.write(s.data(using: .utf8)!)
+                        }
+
+                        // Show in chat
+                        let params = json["params"] as? [String: Any] ?? [:]
+                        let desc = params["command"] as? String ?? params["path"] as? String ?? method
+                        pendingCont?.yield(.toolUse(id: "", name: "Approved", input: desc))
                     }
                 }
 
