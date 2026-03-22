@@ -34,8 +34,7 @@ struct AgentNodePanel: View {
     ]
 
     private let codexModels = [
-        ("gpt-4o", "GPT-4o"),
-        ("gpt-4o-mini", "GPT-4o Mini"),
+        ("gpt-5.4", "GPT-5.4"),
         ("o3", "o3"),
         ("o4-mini", "o4-mini"),
     ]
@@ -133,8 +132,8 @@ struct AgentNodePanel: View {
                 }
                 Button {
                     selectedProvider = "codex"
-                    selectedModel = "gpt-4o"
-                    onModelChange("gpt-4o")
+                    selectedModel = "gpt-5.4"
+                    onModelChange("gpt-5.4")
                 } label: {
                     if selectedProvider == "codex" { Label("Codex", systemImage: "checkmark") }
                     else { Text("Codex") }
@@ -374,8 +373,7 @@ struct AgentNodePanel: View {
             "claude-opus-4-6": 1_000_000,
             "claude-sonnet-4-20250514": 200_000,
             "claude-haiku-4-5-20251001": 200_000,
-            "gpt-4o": 128_000,
-            "gpt-4o-mini": 128_000,
+            "gpt-5.4": 200_000,
             "o3": 200_000,
             "o4-mini": 200_000,
         ]

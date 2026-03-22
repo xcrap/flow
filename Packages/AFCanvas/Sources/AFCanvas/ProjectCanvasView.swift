@@ -126,7 +126,7 @@ struct CanvasEventMonitor: ViewModifier {
 
                 dragMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDragged]) { event in
                     if event.modifierFlags.contains(.option) {
-                        let delta = CGPoint(x: event.deltaX, y: -event.deltaY)
+                        let delta = CGPoint(x: event.deltaX, y: event.deltaY)
                         onPanDelta(delta)
                         isPanning = true
                         return nil // consume

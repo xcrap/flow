@@ -111,6 +111,9 @@ struct ProjectEditorView: View {
         if providerRegistry.provider(for: "claude") == nil {
             providerRegistry.register(ClaudeCodeProvider())
         }
+        if providerRegistry.provider(for: "codex") == nil {
+            providerRegistry.register(CodexProvider())
+        }
         conversationService = ConversationService(registry: providerRegistry)
     }
 
