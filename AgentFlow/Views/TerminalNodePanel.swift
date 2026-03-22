@@ -24,7 +24,7 @@ struct TerminalNodePanel: View {
         .frame(width: node.position.width, height: node.position.height)
         .background {
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color(nsColor: .textBackgroundColor).opacity(0.85))
+                .fill(Color.black.opacity(0.65))
                 .shadow(color: .black.opacity(isSelected ? 0.3 : 0.15), radius: isSelected ? 14 : 8, y: 4)
         }
         .overlay {

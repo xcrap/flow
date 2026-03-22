@@ -69,7 +69,12 @@ struct ProjectEditorView: View {
             }
         }
         .onChange(of: sidebarVisible) {
-            columnVisibility = sidebarVisible ? .all : .detailOnly
+            withAnimation {
+                columnVisibility = sidebarVisible ? .all : .detailOnly
+            }
+        }
+        .onChange(of: columnVisibility) {
+            sidebarVisible = columnVisibility != .detailOnly
         }
     }
 
