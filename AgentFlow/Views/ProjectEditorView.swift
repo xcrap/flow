@@ -17,7 +17,6 @@ struct ProjectEditorView: View {
     @State private var gitService = GitService()
     @State private var showCommitSheet = false
     @State private var commitMessage = ""
-    @State private var showCommandPalette = false
 
     private var activeProject: ProjectState? {
         appState.activeProject
