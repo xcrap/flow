@@ -96,4 +96,9 @@ public struct TerminalLine: Identifiable, Sendable {
     public enum LineType: Sendable {
         case prompt, command, output, error
     }
+
+    public init(text: String, type: LineType) {
+        self.text = text
+        self.type = type
+    }
 }
