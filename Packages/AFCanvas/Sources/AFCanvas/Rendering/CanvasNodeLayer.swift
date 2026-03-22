@@ -102,10 +102,9 @@ public struct CanvasNodeLayer: View {
                 if projectState.canvasState.draggedNodeID != nodeID {
                     projectState.canvasState.draggedNodeID = nodeID
                     projectState.canvasState.isDragging = true
-                    // If dragging a node that isn't selected, select only it
-                    if !projectState.selectedNodeIDs.contains(nodeID) {
-                        projectState.selectNode(nodeID)
-                    }
+                    // Always select only this node when dragging
+                    projectState.selectedNodeIDs = [nodeID]
+                    projectState.selectedConnectionIDs.removeAll()
                     projectState.storeDragStartPositions(for: nodeID)
                 }
 
