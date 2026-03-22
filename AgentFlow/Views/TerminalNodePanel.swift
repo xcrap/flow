@@ -24,7 +24,7 @@ struct TerminalNodePanel: View {
         .frame(width: node.position.width, height: node.position.height)
         .background {
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color.black.opacity(0.65))
+                .fill(Color.black.opacity(0.45))
                 .shadow(color: .black.opacity(isSelected ? 0.3 : 0.15), radius: isSelected ? 14 : 8, y: 4)
         }
         .overlay {
@@ -107,7 +107,7 @@ struct TerminalNodePanel: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .font(.system(size: 13, design: .monospaced))
-            .background(Color(nsColor: .textBackgroundColor))
+            .background(.clear)
             .onChange(of: session.outputLines.count) {
                 withAnimation(.easeOut(duration: 0.1)) {
                     proxy.scrollTo(session.outputLines.last?.id, anchor: .bottom)
