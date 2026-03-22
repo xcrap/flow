@@ -83,8 +83,8 @@ struct AgentFlowCommands: Commands {
                 kind: node.kind,
                 title: "\(node.title) Copy",
                 position: NodePosition(
-                    x: node.position.x + 50,
-                    y: node.position.y + 50,
+                    x: node.position.x + node.position.width + 30,
+                    y: node.position.y,
                     width: node.position.width,
                     height: node.position.height
                 ),
