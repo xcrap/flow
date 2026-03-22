@@ -31,7 +31,6 @@ public final class CodexProvider: AIProvider, Sendable {
                         model: model,
                         systemPrompt: systemPrompt,
                         workingDirectory: workingDirectory,
-                        resumeSessionID: resumeSessionID,
                         continuation: continuation
                     )
                 } catch {
@@ -46,20 +45,12 @@ public final class CodexProvider: AIProvider, Sendable {
         await holder.terminate()
     }
 
-    // MARK: - Private
-
     private static func findCodex() -> URL {
-        let candidates = [
-            "/opt/homebrew/bin/codex",
-            "/usr/local/bin/codex",
-            "\(NSHomeDirectory())/.local/bin/codex",
-        ]
-        for path in candidates {
+        for path in ["/opt/homebrew/bin/codex", "/usr/local/bin/codex", "\(NSHomeDirectory())/.local/bin/codex"] {
             if FileManager.default.isExecutableFile(atPath: path) {
                 return URL(fileURLWithPath: path)
             }
         }
-        // Fallback
         let shell = Process()
         let pipe = Pipe()
         shell.executableURL = URL(fileURLWithPath: "/bin/zsh")
@@ -80,24 +71,20 @@ public final class CodexProvider: AIProvider, Sendable {
         model: String,
         systemPrompt: String?,
         workingDirectory: URL?,
-        resumeSessionID: String?,
         continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
     ) async throws {
-        let codexURL = Self.findCodex()
         let process = Process()
-        let stdin = Pipe()
-        let stdout = Pipe()
-        let stderr = Pipe()
+        let stdinPipe = Pipe()
+        let stdoutPipe = Pipe()
 
-        process.executableURL = codexURL
+        process.executableURL = Self.findCodex()
         process.arguments = ["app-server", "--transport", "stdio"]
-        process.standardInput = stdin
-        process.standardOutput = stdout
-        process.standardError = stderr
+        process.standardInput = stdinPipe
+        process.standardOutput = stdoutPipe
+        process.standardError = FileHandle.nullDevice
 
         var env = ProcessInfo.processInfo.environment
-        let extraPaths = ["/opt/homebrew/bin", "/usr/local/bin", "\(NSHomeDirectory())/.local/bin"]
-        env["PATH"] = (extraPaths + [env["PATH"] ?? ""]).joined(separator: ":")
+        env["PATH"] = ["/opt/homebrew/bin", "/usr/local/bin", "\(NSHomeDirectory())/.local/bin", env["PATH"] ?? ""].joined(separator: ":")
         process.environment = env
 
         if let workingDirectory {
@@ -114,111 +101,104 @@ public final class CodexProvider: AIProvider, Sendable {
             return
         }
 
-        let stdinHandle = stdin.fileHandleForWriting
-        let stdoutHandle = stdout.fileHandleForReading
+        let writer = stdinPipe.fileHandleForWriting
+        let reader = stdoutPipe.fileHandleForReading
 
-        // Helper to send JSON-RPC
-        func send(_ method: String, id: Int, params: [String: Any] = [:]) {
-            var msg: [String: Any] = ["method": method, "id": id, "params": params]
+        // Send JSON-RPC message
+        let writeMsg = { (method: String, id: Int, params: [String: Any]) in
+            let msg: [String: Any] = ["method": method, "id": id, "params": params]
             if let data = try? JSONSerialization.data(withJSONObject: msg),
                var str = String(data: data, encoding: .utf8) {
                 str += "\n"
-                stdinHandle.write(str.data(using: .utf8)!)
+                writer.write(str.data(using: .utf8)!)
             }
         }
 
-        // 1. Start thread
+        // Start thread
         var threadParams: [String: Any] = ["model": model]
         if let systemPrompt, !systemPrompt.isEmpty {
             threadParams["instructions"] = systemPrompt
         }
-        send("thread/start", id: 1, params: threadParams)
+        writeMsg("thread/start", 1, threadParams)
 
-        // Read responses and wait for thread ID
-        var threadID: String?
-        var requestID = 10
-
-        // Start reading in background
         continuation.yield(.initialized(sessionID: "", model: model))
 
+        // Read all responses synchronously on a detached task
+        let promptCopy = prompt
+        nonisolated(unsafe) let writeRef = writeMsg
         await withCheckedContinuation { (outerCont: CheckedContinuation<Void, Never>) in
-            stdoutHandle.readabilityHandler = { handle in
+            nonisolated(unsafe) var threadStarted = false
+            nonisolated(unsafe) var finished = false
+
+            reader.readabilityHandler = { handle in
                 let data = handle.availableData
                 guard !data.isEmpty else {
                     handle.readabilityHandler = nil
-                    continuation.yield(.done(stopReason: "end_turn"))
-                    continuation.finish()
-                    outerCont.resume()
+                    if !finished {
+                        finished = true
+                        continuation.yield(.done(stopReason: "end_turn"))
+                        continuation.finish()
+                        outerCont.resume()
+                    }
                     return
                 }
 
-                if let text = String(data: data, encoding: .utf8) {
-                    let lines = text.components(separatedBy: "\n")
-                    for line in lines where !line.isEmpty {
-                        guard let lineData = line.data(using: .utf8),
-                              let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
-                        else { continue }
+                guard let text = String(data: data, encoding: .utf8) else { return }
 
-                        // Handle response to thread/start
-                        if let id = json["id"] as? Int, id == 1,
-                           let result = json["result"] as? [String: Any],
-                           let thread = result["thread"] as? [String: Any] {
-                            threadID = thread["id"] as? String
+                for line in text.components(separatedBy: "\n") where !line.isEmpty {
+                    guard let lineData = line.data(using: .utf8),
+                          let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
+                    else { continue }
 
-                            // 2. Start turn with the prompt
-                            requestID += 1
-                            send("turn/start", id: requestID, params: [
-                                "thread_id": threadID ?? "",
-                                "content": prompt
-                            ])
-                            continuation.yield(.initialized(sessionID: threadID ?? "", model: model))
-                        }
+                    // Response to thread/start (id: 1)
+                    if let respID = json["id"] as? Int, respID == 1,
+                       let result = json["result"] as? [String: Any],
+                       let thread = result["thread"] as? [String: Any],
+                       let tid = thread["id"] as? String, !threadStarted {
+                        threadStarted = true
+                        continuation.yield(.initialized(sessionID: tid, model: model))
+                        writeRef("turn/start", 2, ["thread_id": tid, "content": promptCopy])
+                    }
 
-                        // Handle notifications
-                        if let method = json["method"] as? String {
-                            let params = json["params"] as? [String: Any] ?? [:]
+                    // Notifications
+                    if let method = json["method"] as? String {
+                        let params = json["params"] as? [String: Any] ?? [:]
 
-                            switch method {
-                            case "turn/message_delta":
-                                if let delta = params["delta"] as? String {
-                                    continuation.yield(.textDelta(delta))
-                                }
-
-                            case "item/message_completed":
-                                if let content = params["content"] as? String {
-                                    // Full message if we didn't get deltas
-                                }
-
-                            case "turn/completed":
-                                let usage = params["usage"] as? [String: Any]
-                                let inputTokens = usage?["input_tokens"] as? Int ?? 0
-                                let outputTokens = usage?["output_tokens"] as? Int ?? 0
-                                continuation.yield(.usage(inputTokens: inputTokens, outputTokens: outputTokens, costUSD: nil))
+                        switch method {
+                        case "turn/message_delta":
+                            if let delta = params["delta"] as? String {
+                                continuation.yield(.textDelta(delta))
+                            }
+                        case "turn/completed":
+                            let usage = params["usage"] as? [String: Any]
+                            continuation.yield(.usage(
+                                inputTokens: usage?["input_tokens"] as? Int ?? 0,
+                                outputTokens: usage?["output_tokens"] as? Int ?? 0,
+                                costUSD: nil
+                            ))
+                            if !finished {
+                                finished = true
                                 continuation.yield(.done(stopReason: "end_turn"))
                                 continuation.finish()
                                 handle.readabilityHandler = nil
                                 outerCont.resume()
-
-                            case "item/tool_use":
-                                let name = params["name"] as? String ?? ""
-                                let toolID = params["id"] as? String ?? ""
-                                let input = params["input"] as? String ?? "{}"
-                                continuation.yield(.toolUse(id: toolID, name: name, input: input))
-
-                            case "turn/error":
-                                let error = params["message"] as? String ?? "Unknown error"
-                                continuation.yield(.error(error))
-
-                            default:
-                                break
                             }
+                        case "item/tool_use":
+                            continuation.yield(.toolUse(
+                                id: params["id"] as? String ?? "",
+                                name: params["name"] as? String ?? "",
+                                input: params["input"] as? String ?? "{}"
+                            ))
+                        case "turn/error":
+                            continuation.yield(.error(params["message"] as? String ?? "Unknown error"))
+                        default:
+                            break
                         }
+                    }
 
-                        // Handle error responses
-                        if let error = json["error"] as? [String: Any] {
-                            let msg = error["message"] as? String ?? "Unknown error"
-                            continuation.yield(.error(msg))
-                        }
+                    // Error responses
+                    if let error = json["error"] as? [String: Any] {
+                        continuation.yield(.error(error["message"] as? String ?? "Unknown error"))
                     }
                 }
             }
@@ -230,7 +210,6 @@ public final class CodexProvider: AIProvider, Sendable {
 
 private actor CodexProcessHolder {
     var process: Process?
-
     func set(_ p: Process?) { process = p }
     func terminate() { process?.terminate(); process = nil }
 }
