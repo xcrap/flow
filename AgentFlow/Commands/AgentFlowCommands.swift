@@ -34,7 +34,7 @@ struct AgentFlowCommands: Commands {
 
         CommandGroup(after: .sidebar) {
             Button("Toggle Sidebar") {
-                sidebarVisible.toggle()
+                NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil)
             }
             .keyboardShortcut("b", modifiers: .command)
         }

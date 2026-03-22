@@ -91,24 +91,100 @@ struct ProjectEditorView: View {
 
     @ViewBuilder
     private func canvasArea(project: ProjectState) -> some View {
-        ZStack(alignment: .bottomTrailing) {
-            ProjectCanvasView(projectState: project) { node, isSelected, isTitleHovered in
-                nodePanel(node: node, isSelected: isSelected, isTitleHovered: isTitleHovered, project: project)
-            }
-
-            // Reset zoom button
-            Button {
-                withAnimation(.spring(duration: 0.3)) {
-                    project.canvasState.zoom = 1.0
-                    project.canvasState.offset = .zero
+        GeometryReader { geo in
+            ZStack(alignment: .bottomTrailing) {
+                ProjectCanvasView(projectState: project) { node, isSelected, isTitleHovered in
+                    nodePanel(node: node, isSelected: isSelected, isTitleHovered: isTitleHovered, project: project)
                 }
-            } label: {
-                Image(systemName: "arrow.up.backward.and.arrow.down.forward")
-                    .frame(width: 28, height: 28)
+
+                // Canvas controls
+                HStack(spacing: 6) {
+                    Button {
+                        tidyUp(project: project, viewportSize: geo.size)
+                    } label: {
+                        Image(systemName: "rectangle.3.group")
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Tidy up")
+
+                    Button {
+                        fitToScreen(project: project, viewportSize: geo.size)
+                    } label: {
+                        Image(systemName: "arrow.up.backward.and.arrow.down.forward")
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Fit to screen")
+                }
+                .padding(12)
             }
-            .buttonStyle(.bordered)
-            .help("Reset view")
-            .padding(12)
+        }
+    }
+
+    // MARK: - Layout
+
+    private func fitToScreen(project: ProjectState, viewportSize: CGSize) {
+        guard !project.nodes.isEmpty else { return }
+
+        // Find bounds of all nodes
+        var minX = Double.infinity, minY = Double.infinity
+        var maxX = -Double.infinity, maxY = -Double.infinity
+
+        for node in project.nodes.values {
+            let left = node.position.x - node.position.width / 2
+            let top = node.position.y - node.position.height / 2
+            let right = node.position.x + node.position.width / 2
+            let bottom = node.position.y + node.position.height / 2
+            minX = min(minX, left)
+            minY = min(minY, top)
+            maxX = max(maxX, right)
+            maxY = max(maxY, bottom)
+        }
+
+        let contentWidth = maxX - minX
+        let contentHeight = maxY - minY
+        let padding: Double = 80
+
+        let zoomX = (viewportSize.width - padding * 2) / contentWidth
+        let zoomY = (viewportSize.height - padding * 2) / contentHeight
+        let newZoom = max(0.1, min(1.5, min(zoomX, zoomY)))
+
+        let centerX = (minX + maxX) / 2
+        let centerY = (minY + maxY) / 2
+
+        withAnimation(.spring(duration: 0.4)) {
+            project.canvasState.zoom = newZoom
+            project.canvasState.offset = CGPoint(
+                x: viewportSize.width / 2 - centerX * newZoom,
+                y: viewportSize.height / 2 - centerY * newZoom
+            )
+        }
+        project.onChange?()
+    }
+
+    private func tidyUp(project: ProjectState, viewportSize: CGSize) {
+        let sortedNodes = project.nodes.values.sorted { $0.id.uuidString < $1.id.uuidString }
+        guard !sortedNodes.isEmpty else { return }
+
+        let columns = max(1, Int(ceil(sqrt(Double(sortedNodes.count)))))
+        let spacingX: Double = 40
+        let spacingY: Double = 40
+
+        withAnimation(.spring(duration: 0.5)) {
+            for (index, node) in sortedNodes.enumerated() {
+                let col = index % columns
+                let row = index / columns
+                let x = Double(col) * (node.position.width + spacingX) + node.position.width / 2
+                let y = Double(row) * (node.position.height + spacingY) + node.position.height / 2
+                project.nodes[node.id]?.position.x = x
+                project.nodes[node.id]?.position.y = y
+            }
+        }
+
+        // After tidy, fit to screen
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            fitToScreen(project: project, viewportSize: viewportSize)
         }
     }
 
