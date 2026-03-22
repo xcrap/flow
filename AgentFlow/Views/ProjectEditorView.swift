@@ -18,6 +18,7 @@ struct ProjectEditorView: View {
     @State private var showCommitSheet = false
     @State private var commitMessage = ""
     @State private var canvasViewportSize: CGSize = CGSize(width: 900, height: 700)
+    @State private var loadedPersistenceProjectIDs: Set<UUID> = []
 
     private var activeProject: ProjectState? {
         appState.activeProject
@@ -453,21 +454,37 @@ struct ProjectEditorView: View {
 
     private func loadConversations(for project: ProjectState) {
         let projectID = project.project.id
+        guard !loadedPersistenceProjectIDs.contains(projectID) else { return }
 
-        if conversationsByProject[projectID] == nil {
-            conversationsByProject[projectID] = ConversationPersistence.loadConversations(for: projectID)
+        var conversations = conversationsByProject[projectID] ?? [:]
+        for (nodeID, persistedState) in ConversationPersistence.loadConversations(for: projectID) {
+            if let existingState = conversations[nodeID] {
+                hydrate(existingState, with: persistedState)
+            } else {
+                conversations[nodeID] = persistedState
+            }
         }
+        conversationsByProject[projectID] = conversations
 
-        if terminalSessionsByProject[projectID] == nil {
-            terminalSessionsByProject[projectID] = ConversationPersistence.loadTerminals(
-                for: projectID,
-                rootPath: project.project.rootPath
-            )
+        var terminalSessions = terminalSessionsByProject[projectID] ?? [:]
+        for (nodeID, persistedSession) in ConversationPersistence.loadTerminals(
+            for: projectID,
+            rootPath: project.project.rootPath
+        ) {
+            if let existingSession = terminalSessions[nodeID] {
+                hydrate(existingSession, with: persistedSession)
+            } else {
+                terminalSessions[nodeID] = persistedSession
+            }
         }
+        terminalSessionsByProject[projectID] = terminalSessions
+
+        loadedPersistenceProjectIDs.insert(projectID)
     }
 
     private func saveConversations(for projectID: UUID, flushProjectState: Bool = true) {
         guard let project = appState.openProjects.first(where: { $0.project.id == projectID }) else { return }
+        loadConversations(for: project)
         if flushProjectState {
             appState.flushSaveNow()
         }
@@ -528,8 +545,37 @@ struct ProjectEditorView: View {
 
         conversationsByProject.removeValue(forKey: projectID)
         terminalSessionsByProject.removeValue(forKey: projectID)
+        loadedPersistenceProjectIDs.remove(projectID)
         ConversationPersistence.delete(for: projectID)
         appState.deleteProject(projectID)
+    }
+
+    private func hydrate(_ target: ConversationState, with persisted: ConversationState) {
+        target.messages = persisted.messages
+        target.runtimePhase = .idle
+        target.streamingText = ""
+        target.error = nil
+        target.sessionID = persisted.sessionID
+        target.activeProviderID = persisted.activeProviderID
+        target.activeModelID = persisted.activeModelID
+        target.activeTurnID = nil
+        target.lastStopReason = nil
+        target.lastRuntimeEventAt = persisted.lastActivityAt
+        target.totalCostUSD = persisted.totalCostUSD
+        target.totalInputTokens = persisted.totalInputTokens
+        target.totalOutputTokens = persisted.totalOutputTokens
+        target.totalCachedInputTokens = persisted.totalCachedInputTokens
+        target.totalReasoningOutputTokens = persisted.totalReasoningOutputTokens
+        target.totalTokens = persisted.totalTokens
+        target.reportedContextWindow = persisted.reportedContextWindow
+        target.currentContextTokens = persisted.currentContextTokens
+        target.clearQueuedPrompts()
+    }
+
+    private func hydrate(_ target: TerminalSession, with persisted: TerminalSession) {
+        target.outputLines = persisted.outputLines
+        target.isRunning = false
+        target.currentDirectory = persisted.currentDirectory
     }
 
     // MARK: - Node Positioning
