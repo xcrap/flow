@@ -121,16 +121,12 @@ struct AgentNodePanel: View {
                     }
                 }
             } label: {
-                HStack(spacing: 3) {
-                    Text(models.first(where: { $0.0 == selectedModel })?.1 ?? selectedModel)
-                        .font(.system(size: 11, weight: .medium))
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .semibold))
-                }
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
+                Text(models.first(where: { $0.0 == selectedModel })?.1 ?? selectedModel)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
             }
             .menuStyle(.borderlessButton)
 
@@ -148,16 +144,12 @@ struct AgentNodePanel: View {
                     }
                 }
             } label: {
-                HStack(spacing: 3) {
-                    Text(efforts.first(where: { $0.0 == selectedEffort })?.1 ?? selectedEffort)
-                        .font(.system(size: 11, weight: .medium))
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .semibold))
-                }
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
+                Text(efforts.first(where: { $0.0 == selectedEffort })?.1 ?? selectedEffort)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
             }
             .menuStyle(.borderlessButton)
 
