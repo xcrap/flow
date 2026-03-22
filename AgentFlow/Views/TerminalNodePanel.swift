@@ -8,6 +8,7 @@ struct TerminalNodePanel: View {
     let isSelected: Bool
     let isTitleHovered: Bool
     @Bindable var session: TerminalSession
+    var onSave: () -> Void
     var onDelete: () -> Void
 
     @State private var inputText = ""
@@ -161,6 +162,7 @@ struct TerminalNodePanel: View {
                 .onChange(of: session.isRunning) {
                     if !session.isRunning {
                         inputFocused = true
+                        onSave()
                     }
                 }
 

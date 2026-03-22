@@ -313,6 +313,7 @@ struct ProjectEditorView: View {
                 isSelected: isSelected,
                 isTitleHovered: isTitleHovered,
                 session: session,
+                onSave: { [self] in saveConversations() },
                 onDelete: {
                     project.removeNode(node.id)
                     terminalSessions.removeValue(forKey: node.id)

@@ -84,40 +84,27 @@ struct ProjectSidebarView: View {
 
     @ViewBuilder
     private func projectRow(_ project: ProjectState) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Label(project.project.name, systemImage: "folder.fill")
+        VStack(alignment: .leading, spacing: 3) {
+            Label(project.project.name, systemImage: "folder.fill")
+
+            HStack(spacing: 8) {
                 Text(shortenPath(project.project.rootPath))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
-            }
 
-            Spacer()
+                let agentCount = project.nodes.values.filter { $0.kind == .agent }.count
+                let terminalCount = project.nodes.values.filter { $0.kind == .terminal }.count
 
-            let agentCount = project.nodes.values.filter { $0.kind == .agent }.count
-            let terminalCount = project.nodes.values.filter { $0.kind == .terminal }.count
-
-            if agentCount > 0 || terminalCount > 0 {
-                HStack(spacing: 4) {
-                    if agentCount > 0 {
-                        HStack(spacing: 2) {
-                            Image(systemName: "brain")
-                                .font(.system(size: 8))
-                            Text("\(agentCount)")
-                                .font(.system(size: 9))
-                        }
-                        .foregroundStyle(.purple.opacity(0.7))
-                    }
-                    if terminalCount > 0 {
-                        HStack(spacing: 2) {
-                            Image(systemName: "terminal")
-                                .font(.system(size: 8))
-                            Text("\(terminalCount)")
-                                .font(.system(size: 9))
-                        }
-                        .foregroundStyle(.blue.opacity(0.7))
-                    }
+                if agentCount > 0 {
+                    Text("\(agentCount) agent\(agentCount > 1 ? "s" : "")")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                }
+                if terminalCount > 0 {
+                    Text("\(terminalCount) term\(terminalCount > 1 ? "s" : "")")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
                 }
             }
         }
