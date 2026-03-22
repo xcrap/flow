@@ -26,7 +26,21 @@ public final class ProjectPersistence {
         return dir.appendingPathComponent("projects.json")
     }
 
+    private static var isSaving = false
+
     public static func save(_ appState: AppState) {
+        // Prevent concurrent saves
+        guard !isSaving else { return }
+        isSaving = true
+        defer { isSaving = false }
+
+        // Safety: never write empty if we had projects before
+        if appState.openProjects.isEmpty {
+            if FileManager.default.fileExists(atPath: saveURL.path) {
+                return // Don't overwrite with empty
+            }
+        }
+
         let persisted = PersistedAppState(
             projects: appState.openProjects.map { state in
                 // Sync canvas state into project model before saving
@@ -48,6 +62,14 @@ public final class ProjectPersistence {
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
             let data = try encoder.encode(persisted)
+
+            // Backup before overwriting
+            let backupURL = saveURL.deletingLastPathComponent().appendingPathComponent("projects.backup.json")
+            if FileManager.default.fileExists(atPath: saveURL.path) {
+                try? FileManager.default.removeItem(at: backupURL)
+                try? FileManager.default.copyItem(at: saveURL, to: backupURL)
+            }
+
             try data.write(to: saveURL, options: .atomic)
         } catch {
             print("Failed to save projects: \(error)")
