@@ -27,13 +27,9 @@ public struct ProjectCanvasView<NodeContent: View>: View {
                     }
                 )
             }
-            .background {
-                // Pan gesture only on empty canvas area
-                Color.clear
-                    .contentShape(Rectangle())
-                    .gesture(canvasPanGesture)
-                    .gesture(canvasZoomGesture)
-            }
+            .contentShape(Rectangle())
+            .gesture(canvasPanGesture)
+            .gesture(canvasZoomGesture)
             .onScrollGesture { [projectState] delta in
                 let oldZoom = projectState.canvasState.zoom
                 let factor = 1.0 + (delta.y * 0.01)
