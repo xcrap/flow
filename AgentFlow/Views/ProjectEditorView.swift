@@ -61,7 +61,10 @@ struct ProjectEditorView: View {
             }
         }
         .onChange(of: appState.activeProjectID) {
-            // Save conversations for previous project, load for new one
+            // Save before switching
+            saveConversations()
+            appState.scheduleSave()
+
             if let project = activeProject {
                 loadConversations(for: project)
                 ensureSessionsExist(for: project)
@@ -388,6 +391,9 @@ struct ProjectEditorView: View {
         // Use --resume if we have a session ID from a previous conversation
         let sessionID = conversation.sessionID
 
+        // Save immediately so user message is persisted
+        saveConversations()
+
         service.send(
             prompt: text,
             to: conversation,
@@ -398,8 +404,8 @@ struct ProjectEditorView: View {
             permissionMode: permMode,
             workingDirectory: workingDir,
             resumeSessionID: sessionID,
-            onComplete: {
-                Task { @MainActor [saveConversations] in
+            onComplete: { [saveConversations] in
+                Task { @MainActor in
                     saveConversations()
                 }
             }
