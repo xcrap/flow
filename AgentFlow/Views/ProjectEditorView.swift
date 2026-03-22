@@ -14,6 +14,7 @@ struct ProjectEditorView: View {
     @State private var conversations: [UUID: ConversationState] = [:]
     @State private var terminalSessions: [UUID: TerminalSession] = [:]
     @State private var conversationService: ConversationService?
+    @State private var conversationsLoaded = false
     @State private var gitService = GitService()
     @State private var showCommitSheet = false
     @State private var commitMessage = ""
@@ -322,6 +323,11 @@ struct ProjectEditorView: View {
 
     private func conversationFor(_ nodeID: UUID) -> ConversationState {
         if let existing = conversations[nodeID] { return existing }
+        // Don't create new until we've loaded saved conversations
+        guard conversationsLoaded else {
+            let conv = ConversationState(nodeID: nodeID)
+            return conv
+        }
         let conv = ConversationState(nodeID: nodeID)
         DispatchQueue.main.async { conversations[nodeID] = conv }
         return conv
@@ -395,6 +401,7 @@ struct ProjectEditorView: View {
         for (id, conv) in loaded {
             conversations[id] = conv
         }
+        conversationsLoaded = true
     }
 
     private func saveConversations() {

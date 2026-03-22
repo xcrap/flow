@@ -39,6 +39,11 @@ public struct CanvasNodeLayer: View {
         let isTitleHovered = hoveredNodeID == node.id
 
         nodeContent(node, isSelected, isTitleHovered)
+            // Block canvas pan from firing through the node body
+            .contentShape(Rectangle())
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 100000) // never activates, but blocks canvas pan
+            )
             .overlay(alignment: .top) {
                 HStack(spacing: 0) {
                     // Left: drag handle + hover area
