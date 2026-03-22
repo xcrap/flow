@@ -104,25 +104,59 @@ struct AgentNodePanel: View {
 
             Spacer()
 
-            Picker("", selection: $selectedModel) {
+            Menu {
                 ForEach(models, id: \.0) { id, name in
-                    Text(name).tag(id)
+                    Button {
+                        selectedModel = id
+                        onModelChange(id)
+                    } label: {
+                        if id == selectedModel {
+                            Label(name, systemImage: "checkmark")
+                        } else {
+                            Text(name)
+                        }
+                    }
                 }
+            } label: {
+                HStack(spacing: 3) {
+                    Text(models.first(where: { $0.0 == selectedModel })?.1 ?? selectedModel)
+                        .font(.system(size: 11, weight: .medium))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
             }
-            .pickerStyle(.menu)
-            .frame(width: 105)
-            .controlSize(.small)
-            .onChange(of: selectedModel) { _, val in onModelChange(val) }
+            .menuStyle(.borderlessButton)
 
-            Picker("", selection: $selectedEffort) {
+            Menu {
                 ForEach(efforts, id: \.0) { id, name in
-                    Text(name).tag(id)
+                    Button {
+                        selectedEffort = id
+                        onEffortChange(id)
+                    } label: {
+                        if id == selectedEffort {
+                            Label(name, systemImage: "checkmark")
+                        } else {
+                            Text(name)
+                        }
+                    }
                 }
+            } label: {
+                HStack(spacing: 3) {
+                    Text(efforts.first(where: { $0.0 == selectedEffort })?.1 ?? selectedEffort)
+                        .font(.system(size: 11, weight: .medium))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
             }
-            .pickerStyle(.menu)
-            .frame(width: 75)
-            .controlSize(.small)
-            .onChange(of: selectedEffort) { _, val in onEffortChange(val) }
+            .menuStyle(.borderlessButton)
 
             Button {
                 showSettings.toggle()

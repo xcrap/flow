@@ -108,10 +108,23 @@ public struct CanvasNodeLayer: View {
                     projectState.storeDragStartPositions(for: nodeID)
                 }
 
-                let translation = CGPoint(
+                var translation = CGPoint(
                     x: value.translation.width / zoom,
                     y: value.translation.height / zoom
                 )
+
+                // Snap to grid when Shift is held
+                if NSEvent.modifierFlags.contains(.shift) {
+                    let gridSize: Double = 20
+                    if let start = projectState.dragStartPositions[nodeID] {
+                        let rawX = start.x + translation.x
+                        let rawY = start.y + translation.y
+                        let snappedX = (rawX / gridSize).rounded() * gridSize
+                        let snappedY = (rawY / gridSize).rounded() * gridSize
+                        translation = CGPoint(x: snappedX - start.x, y: snappedY - start.y)
+                    }
+                }
+
                 projectState.applyDragTranslation(translation, for: nodeID)
             }
             .onEnded { _ in
