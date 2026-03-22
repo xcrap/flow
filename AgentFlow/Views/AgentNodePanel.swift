@@ -581,6 +581,34 @@ struct AgentNodePanel: View {
         return min(100, Double(currentContextTokens) / Double(contextLimit) * 100)
     }
 
+    private var usagePercentLabel: String? {
+        guard let usagePercent else { return nil }
+
+        switch usagePercent {
+        case ..<1:
+            return "<1%"
+        case ..<10:
+            let formatted = String(format: "%.1f", usagePercent)
+                .replacingOccurrences(of: ".0", with: "")
+            return "\(formatted)%"
+        default:
+            return "\(Int(usagePercent.rounded()))%"
+        }
+    }
+
+    private var usageStatusText: String? {
+        guard let contextLimit = conversation.reportedContextWindow,
+              contextLimit > 0,
+              let currentContextTokens = conversation.currentContextTokens,
+              currentContextTokens > 0,
+              let usagePercentLabel
+        else {
+            return nil
+        }
+
+        return "Current turn \(formatTokenCount(currentContextTokens)) of \(formatTokenCount(contextLimit)) (\(usagePercentLabel))"
+    }
+
     @ViewBuilder
     private var contextBar: some View {
         if hasUsageData || conversation.queuedPromptCount > 0 || conversation.isStreaming {
@@ -598,7 +626,7 @@ struct AgentNodePanel: View {
                     Spacer()
                 }
 
-                if let usagePercent {
+                if let usagePercent, let usageStatusText {
                     HStack(spacing: 8) {
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
@@ -606,12 +634,12 @@ struct AgentNodePanel: View {
                                     .fill(Color(nsColor: .separatorColor).opacity(0.2))
                                 RoundedRectangle(cornerRadius: 2)
                                     .fill(usagePercent > 80 ? Color.red : usagePercent > 50 ? Color.orange : Color.green.opacity(0.8))
-                                    .frame(width: max(0, geo.size.width * min(1, usagePercent / 100)))
+                                    .frame(width: max(2, geo.size.width * min(1, usagePercent / 100)))
                             }
                         }
                         .frame(height: 3)
 
-                        Text("Current turn \(Int(usagePercent))% of \(formatTokenCount(conversation.reportedContextWindow ?? 0))")
+                        Text(usageStatusText)
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundStyle(.tertiary)
                             .fixedSize()
