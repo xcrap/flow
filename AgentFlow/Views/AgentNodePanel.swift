@@ -66,9 +66,7 @@ struct AgentNodePanel: View {
             titleBar
             Divider()
             messagesArea
-            if conversation.totalInputTokens > 0 || conversation.totalOutputTokens > 0 {
-                tokenBar
-            }
+            contextBar
             Divider()
             inputBar
         }
@@ -272,24 +270,56 @@ struct AgentNodePanel: View {
 
     // MARK: - Token Bar
 
-    private var tokenBar: some View {
-        HStack(spacing: 14) {
-            Label("\(formatTokens(conversation.totalInputTokens)) in", systemImage: "arrow.down.circle")
-            Label("\(formatTokens(conversation.totalOutputTokens)) out", systemImage: "arrow.up.circle")
-            Spacer()
-            Text("\(conversation.messages.count) msgs")
-        }
-        .font(.system(size: 10, design: .monospaced))
-        .foregroundStyle(.tertiary)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 5)
+    private var contextLimit: Int {
+        let modelLimits: [String: Int] = [
+            "sonnet": 200_000,
+            "opus": 1_000_000,
+            "haiku": 200_000,
+            "claude-sonnet-4-6": 200_000,
+            "claude-opus-4-6": 1_000_000,
+            "claude-sonnet-4-20250514": 200_000,
+            "claude-haiku-4-5-20251001": 200_000,
+        ]
+        return modelLimits[selectedModel] ?? 200_000
     }
 
-    private func formatTokens(_ count: Int) -> String {
-        if count >= 1000 {
-            return String(format: "%.1fk", Double(count) / 1000.0)
+    private var totalTokens: Int {
+        conversation.totalInputTokens + conversation.totalOutputTokens
+    }
+
+    private var usagePercent: Double {
+        guard contextLimit > 0 else { return 0 }
+        return Double(totalTokens) / Double(contextLimit) * 100
+    }
+
+    private var contextBar: some View {
+        HStack(spacing: 8) {
+            // Progress bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color(nsColor: .separatorColor).opacity(0.2))
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(usagePercent > 80 ? Color.red : usagePercent > 50 ? Color.orange : Color.purple.opacity(0.6))
+                        .frame(width: max(0, geo.size.width * min(1, usagePercent / 100)))
+                }
+            }
+            .frame(height: 3)
+
+            Text("\(Int(usagePercent))% of \(formatContextLimit(contextLimit))")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.tertiary)
+                .fixedSize()
         }
-        return "\(count)"
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+    }
+
+    private func formatContextLimit(_ limit: Int) -> String {
+        if limit >= 1_000_000 {
+            return "\(limit / 1_000_000)M"
+        }
+        return "\(limit / 1000)K"
     }
 
     // MARK: - Input Bar

@@ -39,14 +39,23 @@ public struct CanvasNodeLayer: View {
         let isTitleHovered = hoveredNodeID == node.id
 
         nodeContent(node, isSelected, isTitleHovered)
-            .overlay(alignment: .topLeading) {
-                Color.clear
-                    .frame(width: max(0, node.position.width * 0.55), height: 40)
-                    .contentShape(Rectangle())
-                    .onHover { hovering in
-                        hoveredNodeID = hovering ? node.id : nil
-                    }
-                    .gesture(nodeDragGesture(for: node.id))
+            .overlay(alignment: .top) {
+                HStack(spacing: 0) {
+                    // Left: drag handle + hover area
+                    Color.clear
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                        .gesture(nodeDragGesture(for: node.id))
+
+                    // Right: not interactive (pickers underneath handle clicks)
+                    Color.clear
+                        .frame(width: node.position.width * 0.45)
+                        .allowsHitTesting(false)
+                }
+                .frame(height: 42)
+                .onHover { hovering in
+                    hoveredNodeID = hovering ? node.id : nil
+                }
             }
             .overlay(alignment: .trailing) {
                 // Right edge resize
