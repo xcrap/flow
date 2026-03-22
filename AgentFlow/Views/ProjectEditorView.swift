@@ -397,16 +397,20 @@ struct ProjectEditorView: View {
     // MARK: - Conversation Persistence
 
     private func loadConversations(for project: ProjectState) {
-        let loaded = ConversationPersistence.load(for: project.project.id)
-        for (id, conv) in loaded {
+        let loadedConvs = ConversationPersistence.loadConversations(for: project.project.id)
+        for (id, conv) in loadedConvs {
             conversations[id] = conv
+        }
+        let loadedTerms = ConversationPersistence.loadTerminals(for: project.project.id, rootPath: project.project.rootPath)
+        for (id, session) in loadedTerms {
+            terminalSessions[id] = session
         }
         conversationsLoaded = true
     }
 
     private func saveConversations() {
         guard let project = activeProject else { return }
-        ConversationPersistence.save(conversations: conversations, for: project.project.id)
+        ConversationPersistence.save(conversations: conversations, terminals: terminalSessions, for: project.project.id)
     }
 
     // MARK: - Node Positioning
