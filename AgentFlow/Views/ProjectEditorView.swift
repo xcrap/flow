@@ -113,10 +113,7 @@ struct ProjectEditorView: View {
                 }
                 .id(project.project.id) // Force full recreation on project switch
 
-                // Bottom bar: minimap left, controls right
-                HStack(alignment: .bottom) {
-                    CanvasMinimapView(projectState: project, viewportSize: geo.size)
-
+                HStack {
                     Spacer()
 
                     HStack(spacing: 6) {
