@@ -390,7 +390,17 @@ private actor CodexSession {
                 }
             }
 
+        case "thread/compacted":
+            activeContinuation?.yield(.lifecycle(.phaseChanged(.compacted)))
+
         case "thread/status/changed":
+            let compactStatus = compactStatus(from: params)
+            if compactStatus == "compacting" {
+                activeContinuation?.yield(.lifecycle(.phaseChanged(.compacting)))
+            } else if compactStatus == "compacted" {
+                activeContinuation?.yield(.lifecycle(.phaseChanged(.compacted)))
+            }
+
             if let status = params["status"] as? [String: Any],
                status["type"] as? String == "systemError"
             {
@@ -432,6 +442,58 @@ private actor CodexSession {
         guard !didEmitTurnStarted else { return }
         didEmitTurnStarted = true
         activeContinuation?.yield(.lifecycle(.turnStarted(turnID: turnID)))
+    }
+
+    private func compactStatus(from params: [String: Any]) -> String? {
+        if let status = params["status"] as? String {
+            return normalizeCompactStatus(status)
+        }
+
+        if let status = params["status"] as? [String: Any] {
+            for key in ["type", "state", "status"] {
+                if let value = status[key] as? String,
+                   let normalized = normalizeCompactStatus(value)
+                {
+                    return normalized
+                }
+            }
+        }
+
+        if let thread = params["thread"] as? [String: Any] {
+            for key in ["state", "status"] {
+                if let value = thread[key] as? String,
+                   let normalized = normalizeCompactStatus(value)
+                {
+                    return normalized
+                }
+            }
+        }
+
+        for key in ["state", "type"] {
+            if let value = params[key] as? String,
+               let normalized = normalizeCompactStatus(value)
+            {
+                return normalized
+            }
+        }
+
+        return nil
+    }
+
+    private func normalizeCompactStatus(_ value: String) -> String? {
+        let normalized = value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        if normalized.contains("compacting") {
+            return "compacting"
+        }
+
+        if normalized.contains("compacted") || normalized == "compact_boundary" {
+            return "compacted"
+        }
+
+        return nil
     }
 
     private func startOrResumeThread() {

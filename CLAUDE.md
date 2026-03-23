@@ -72,7 +72,8 @@ cd Packages/AFAgent && swift test
 | Cmd+Plus/Minus | Zoom in/out |
 | Cmd+0 | Reset zoom |
 | Delete | Delete selected node |
-| Option+Drag | Pan canvas (anywhere) |
+| Drag empty canvas | Pan canvas |
+| Cmd+Drag | Pan canvas (anywhere) |
 | Shift+Drag | Snap to grid |
 
 ## Conventions

@@ -4,8 +4,11 @@ import AFCore
 @Observable
 @MainActor
 public final class ConversationState {
+    private static let maxRuntimeActivities = 200
+
     public let nodeID: UUID
     public var messages: [ConversationMessage] = []
+    public var runtimeActivities: [ConversationRuntimeActivity] = []
     public var runtimePhase: ProviderSessionPhase = .idle
     public var streamingText: String = ""
     public var inputText: String = ""
@@ -45,6 +48,52 @@ public final class ConversationState {
             content: [.text(text)]
         )
         messages.append(message)
+    }
+
+    public func recordRuntimeActivity(
+        kind: ConversationRuntimeActivityKind,
+        tone: ConversationRuntimeActivityTone,
+        summary: String,
+        detail: String? = nil,
+        state: String? = nil,
+        turnID: String? = nil
+    ) {
+        let trimmedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedSummary.isEmpty else { return }
+
+        let trimmedDetail = detail?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nilIfEmpty
+
+        if let last = runtimeActivities.last,
+           last.kind == kind,
+           last.tone == tone,
+           last.summary == trimmedSummary,
+           last.detail == trimmedDetail,
+           last.state == state,
+           last.turnID == turnID
+        {
+            runtimeActivities[runtimeActivities.count - 1].timestamp = Date()
+            lastRuntimeEventAt = runtimeActivities.last?.timestamp
+            return
+        }
+
+        runtimeActivities.append(
+            ConversationRuntimeActivity(
+                kind: kind,
+                tone: tone,
+                summary: trimmedSummary,
+                detail: trimmedDetail,
+                state: state,
+                turnID: turnID
+            )
+        )
+
+        if runtimeActivities.count > Self.maxRuntimeActivities {
+            runtimeActivities.removeFirst(runtimeActivities.count - Self.maxRuntimeActivities)
+        }
+
+        lastRuntimeEventAt = runtimeActivities.last?.timestamp
     }
 
     public func startStreaming(providerID: String? = nil, modelID: String? = nil) {
@@ -87,8 +136,14 @@ public final class ConversationState {
         lastRuntimeEventAt = Date()
     }
 
+    public func applyLifecyclePhase(_ phase: ProviderSessionPhase) {
+        guard runtimePhase != .cancelling || phase == .idle || phase == .failed else { return }
+        runtimePhase = phase
+        lastRuntimeEventAt = Date()
+    }
+
     public func appendStreamDelta(_ delta: String) {
-        if runtimePhase == .preparing {
+        if runtimePhase == .preparing || runtimePhase == .compacting || runtimePhase == .compacted {
             runtimePhase = .responding
         }
         lastRuntimeEventAt = Date()
@@ -171,6 +226,14 @@ public final class ConversationState {
 
         queuedPromptPreviews.append(preview)
         queuedPromptCount = queuedPromptPreviews.count
+        recordRuntimeActivity(
+            kind: .queue,
+            tone: .info,
+            summary: "Prompt queued",
+            detail: preview,
+            state: "queued",
+            turnID: activeTurnID
+        )
     }
 
     @discardableResult
@@ -212,10 +275,15 @@ public final class ConversationState {
         currentContextTokens = nil
         queuedPromptCount = 0
         queuedPromptPreviews.removeAll()
+        runtimeActivities.removeAll()
     }
 
     public var lastActivityAt: Date? {
         messages.last?.timestamp
+    }
+
+    public var lastVisibleActivityAt: Date? {
+        [messages.last?.timestamp, latestRuntimeActivity?.timestamp].compactMap { $0 }.max()
     }
 
     public var latestUserPrompt: String? {
@@ -238,6 +306,7 @@ public final class ConversationState {
                 return text.isEmpty ? nil : text
             }
             .first
+            ?? latestRuntimeActivity?.summary
     }
 
     public var nextQueuedPromptPreview: String? {
@@ -246,5 +315,19 @@ public final class ConversationState {
 
     public var visibleQueuedPromptPreviews: [String] {
         Array(queuedPromptPreviews.prefix(3))
+    }
+
+    public var latestRuntimeActivity: ConversationRuntimeActivity? {
+        runtimeActivities.last
+    }
+
+    public var recentRuntimeActivities: [ConversationRuntimeActivity] {
+        Array(runtimeActivities.suffix(4))
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

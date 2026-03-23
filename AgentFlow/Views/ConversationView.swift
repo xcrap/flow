@@ -21,6 +21,10 @@ struct ConversationView: View {
                         .green
                     case .preparing:
                         Color(red: 0.88, green: 0.67, blue: 0.22)
+                    case .compacting:
+                        Color(red: 0.93, green: 0.58, blue: 0.18)
+                    case .compacted:
+                        Color(red: 0.48, green: 0.72, blue: 0.58)
                     case .cancelling:
                         .orange
                     case .failed:
@@ -83,6 +87,10 @@ struct ConversationView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
+                        if !conversationState.recentRuntimeActivities.isEmpty {
+                            RuntimeActivityList(activities: conversationState.recentRuntimeActivities)
+                        }
+
                         ForEach(conversationState.messages) { message in
                             MessageBubble(message: message)
                                 .id(message.id)
@@ -104,6 +112,15 @@ struct ConversationView: View {
                 .onChange(of: conversationState.messages.count) {
                     withAnimation {
                         proxy.scrollTo(conversationState.messages.last?.id, anchor: .bottom)
+                    }
+                }
+                .onChange(of: conversationState.runtimeActivities.count) {
+                    withAnimation {
+                        if let lastMessageID = conversationState.messages.last?.id {
+                            proxy.scrollTo(lastMessageID, anchor: .bottom)
+                        } else if conversationState.isStreaming {
+                            proxy.scrollTo("streaming", anchor: .bottom)
+                        }
                     }
                 }
                 .onChange(of: conversationState.streamingText) {

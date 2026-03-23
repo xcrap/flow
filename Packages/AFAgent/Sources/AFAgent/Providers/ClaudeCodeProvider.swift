@@ -5,17 +5,19 @@ private final class ClaudeLineBuffer: @unchecked Sendable {
     var value = ""
 }
 
+private let claudeEffectiveContextWindow = 200_000
+
 public final class ClaudeCodeProvider: AIProvider, Sendable {
     public let id = "claude"
     public let displayName = "Claude (via Claude Code)"
 
     public let availableModels: [AIModel] = [
-        AIModel(id: "sonnet", name: "Sonnet (latest)", contextWindow: 200_000),
-        AIModel(id: "opus", name: "Opus (latest)", contextWindow: 1_000_000),
-        AIModel(id: "haiku", name: "Haiku (latest)", contextWindow: 200_000),
-        AIModel(id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: 200_000),
-        AIModel(id: "claude-opus-4-6", name: "Claude Opus 4.6", contextWindow: 1_000_000),
-        AIModel(id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", contextWindow: 200_000),
+        AIModel(id: "sonnet", name: "Sonnet (latest)", contextWindow: claudeEffectiveContextWindow),
+        AIModel(id: "opus", name: "Opus (latest)", contextWindow: claudeEffectiveContextWindow),
+        AIModel(id: "haiku", name: "Haiku (latest)", contextWindow: claudeEffectiveContextWindow),
+        AIModel(id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: claudeEffectiveContextWindow),
+        AIModel(id: "claude-opus-4-6", name: "Claude Opus 4.6", contextWindow: claudeEffectiveContextWindow),
+        AIModel(id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", contextWindow: claudeEffectiveContextWindow),
     ]
 
     public init() {}
@@ -281,9 +283,27 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
 
         switch type {
         case "system":
-            let sessionID = json["session_id"] as? String ?? ""
-            let model = json["model"] as? String ?? ""
-            return .initialized(sessionID: sessionID, model: model)
+            let subtype = json["subtype"] as? String
+
+            switch subtype {
+            case nil, "", "init":
+                let sessionID = json["session_id"] as? String ?? ""
+                let model = json["model"] as? String ?? ""
+                return .initialized(sessionID: sessionID, model: model)
+
+            case "status":
+                guard let status = json["status"] as? String else { return nil }
+                if status == "compacting" {
+                    return .lifecycle(.phaseChanged(.compacting))
+                }
+                return nil
+
+            case "compact_boundary":
+                return .lifecycle(.phaseChanged(.compacted))
+
+            default:
+                return nil
+            }
 
         case "stream_event":
             guard let event = json["event"] as? [String: Any],

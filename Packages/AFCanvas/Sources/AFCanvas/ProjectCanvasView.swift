@@ -18,6 +18,8 @@ public struct ProjectCanvasView<NodeContent: View>: View {
         GeometryReader { geometry in
             ZStack {
                 CanvasBackgroundLayer(canvasState: projectState.canvasState)
+                    .contentShape(Rectangle())
+                    .gesture(canvasPanGesture)
 
                 CanvasNodeLayer(
                     projectState: projectState,
@@ -30,8 +32,6 @@ public struct ProjectCanvasView<NodeContent: View>: View {
             .background {
                 ClickDetectorOverlay(projectState: projectState)
             }
-            .contentShape(Rectangle())
-            .gesture(canvasPanGesture)
             .gesture(canvasZoomGesture)
             .canvasEventMonitor(
                 onZoomScroll: { [projectState] delta in
@@ -108,10 +108,10 @@ struct CanvasEventMonitor: ViewModifier {
     let onPanDelta: (CGPoint) -> Void
     let onPanEnd: () -> Void
     @State private var scrollMonitor: Any?
+    @State private var mouseDownMonitor: Any?
     @State private var dragMonitor: Any?
     @State private var dragUpMonitor: Any?
     @State private var isPanning = false
-    @State private var lastDragPoint: NSPoint?
 
     func body(content: Content) -> some View {
         content
@@ -124,11 +124,21 @@ struct CanvasEventMonitor: ViewModifier {
                     return event
                 }
 
+                mouseDownMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { event in
+                    guard event.modifierFlags.contains(.command) else {
+                        return event
+                    }
+
+                    // Consume the full command-drag sequence up front so text views
+                    // do not start their own drag/select tracking and then lose it mid-stream.
+                    isPanning = true
+                    return nil
+                }
+
                 dragMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDragged]) { event in
-                    if event.modifierFlags.contains(.option) {
+                    if isPanning {
                         let delta = CGPoint(x: event.deltaX, y: event.deltaY)
                         onPanDelta(delta)
-                        isPanning = true
                         return nil // consume
                     }
                     return event
@@ -138,12 +148,14 @@ struct CanvasEventMonitor: ViewModifier {
                     if isPanning {
                         isPanning = false
                         onPanEnd()
+                        return nil
                     }
                     return event
                 }
             }
             .onDisappear {
                 if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor) }
+                if let mouseDownMonitor { NSEvent.removeMonitor(mouseDownMonitor) }
                 if let dragMonitor { NSEvent.removeMonitor(dragMonitor) }
                 if let dragUpMonitor { NSEvent.removeMonitor(dragUpMonitor) }
             }

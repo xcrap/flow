@@ -8,6 +8,7 @@ struct PersistedConversation: Codable {
     var nodeID: UUID
     var sessionID: String?
     var messages: [ConversationMessage]
+    var runtimeActivities: [ConversationRuntimeActivity]
     var totalCostUSD: Double
     var totalInputTokens: Int
     var totalOutputTokens: Int
@@ -20,6 +21,7 @@ struct PersistedConversation: Codable {
         nodeID: UUID,
         sessionID: String?,
         messages: [ConversationMessage],
+        runtimeActivities: [ConversationRuntimeActivity],
         totalCostUSD: Double,
         totalInputTokens: Int,
         totalOutputTokens: Int,
@@ -31,6 +33,7 @@ struct PersistedConversation: Codable {
         self.nodeID = nodeID
         self.sessionID = sessionID
         self.messages = messages
+        self.runtimeActivities = runtimeActivities
         self.totalCostUSD = totalCostUSD
         self.totalInputTokens = totalInputTokens
         self.totalOutputTokens = totalOutputTokens
@@ -45,6 +48,7 @@ struct PersistedConversation: Codable {
         nodeID = try container.decode(UUID.self, forKey: .nodeID)
         sessionID = try container.decodeIfPresent(String.self, forKey: .sessionID)
         messages = try container.decode([ConversationMessage].self, forKey: .messages)
+        runtimeActivities = try container.decodeIfPresent([ConversationRuntimeActivity].self, forKey: .runtimeActivities) ?? []
         totalCostUSD = try container.decodeIfPresent(Double.self, forKey: .totalCostUSD) ?? 0
         totalInputTokens = try container.decodeIfPresent(Int.self, forKey: .totalInputTokens) ?? 0
         totalOutputTokens = try container.decodeIfPresent(Int.self, forKey: .totalOutputTokens) ?? 0
@@ -91,6 +95,7 @@ enum ConversationPersistence {
                     nodeID: nodeID,
                     sessionID: state.sessionID,
                     messages: state.messages,
+                    runtimeActivities: state.runtimeActivities,
                     totalCostUSD: state.totalCostUSD,
                     totalInputTokens: state.totalInputTokens,
                     totalOutputTokens: state.totalOutputTokens,
@@ -132,6 +137,7 @@ enum ConversationPersistence {
             let state = ConversationState(nodeID: conv.nodeID)
             state.sessionID = conv.sessionID
             state.messages = conv.messages
+            state.runtimeActivities = conv.runtimeActivities
             state.totalCostUSD = conv.totalCostUSD
             state.totalInputTokens = conv.totalInputTokens
             state.totalOutputTokens = conv.totalOutputTokens

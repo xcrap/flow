@@ -35,6 +35,30 @@ final class ClaudeCodeProviderParseTests: XCTestCase {
         }
     }
 
+    func testParseSystemStatusCompacting() throws {
+        let json = """
+        {"type":"system","subtype":"status","status":"compacting"}
+        """
+        let event = ClaudeCodeProvider.parseStreamEvent(json)
+        if case .lifecycle(.phaseChanged(let phase)) = event {
+            XCTAssertEqual(phase, .compacting)
+        } else {
+            XCTFail("Expected .lifecycle phaseChanged(.compacting), got \(String(describing: event))")
+        }
+    }
+
+    func testParseSystemCompactBoundary() throws {
+        let json = """
+        {"type":"system","subtype":"compact_boundary","session_id":"sess-123"}
+        """
+        let event = ClaudeCodeProvider.parseStreamEvent(json)
+        if case .lifecycle(.phaseChanged(let phase)) = event {
+            XCTAssertEqual(phase, .compacted)
+        } else {
+            XCTFail("Expected .lifecycle phaseChanged(.compacted), got \(String(describing: event))")
+        }
+    }
+
     // MARK: - Stream Event: content_block_delta
 
     func testParseContentBlockDelta() throws {
@@ -357,6 +381,18 @@ final class ConversationStateTests: XCTestCase {
         XCTAssertEqual(state.streamingText, "ABC")
     }
 
+    @MainActor
+    func testAppendStreamDeltaAfterCompactionResumesResponding() throws {
+        let state = ConversationState(nodeID: UUID())
+        state.startStreaming()
+        state.applyLifecyclePhase(.compacting)
+        XCTAssertEqual(state.runtimePhase, .compacting)
+
+        state.appendStreamDelta("After compact")
+        XCTAssertEqual(state.runtimePhase, .responding)
+        XCTAssertEqual(state.streamingText, "After compact")
+    }
+
     // MARK: - finishStreaming
 
     @MainActor
@@ -429,6 +465,18 @@ final class ConversationStateTests: XCTestCase {
         XCTAssertEqual(state.error, "Something went wrong")
     }
 
+    @MainActor
+    func testApplyLifecyclePhaseCompacted() throws {
+        let state = ConversationState(nodeID: UUID())
+        state.startStreaming()
+
+        state.applyLifecyclePhase(.compacted)
+
+        XCTAssertTrue(state.isStreaming)
+        XCTAssertEqual(state.runtimePhase, .compacted)
+        XCTAssertEqual(state.statusLabel, "Compacted")
+    }
+
     // MARK: - updateUsage
 
     @MainActor
@@ -488,6 +536,29 @@ final class ConversationStateTests: XCTestCase {
         state.clearQueuedPrompts()
         XCTAssertEqual(state.queuedPromptCount, 0)
         XCTAssertTrue(state.queuedPromptPreviews.isEmpty)
+    }
+
+    @MainActor
+    func testRecordRuntimeActivityCoalescesDuplicates() throws {
+        let state = ConversationState(nodeID: UUID())
+
+        state.recordRuntimeActivity(
+            kind: .contextCompaction,
+            tone: .working,
+            summary: "Context compacting",
+            detail: "14K of 200K",
+            state: "compacting"
+        )
+        state.recordRuntimeActivity(
+            kind: .contextCompaction,
+            tone: .working,
+            summary: "Context compacting",
+            detail: "14K of 200K",
+            state: "compacting"
+        )
+
+        XCTAssertEqual(state.runtimeActivities.count, 1)
+        XCTAssertEqual(state.latestRuntimeActivity?.summary, "Context compacting")
     }
 }
 
@@ -676,6 +747,66 @@ final class ConversationServiceTests: XCTestCase {
         XCTAssertEqual(state.currentContextTokens, 150)
         XCTAssertEqual(state.totalTokens, 150)
     }
+
+    @MainActor
+    func testLifecycleCompactionPhaseUpdatesConversationState() async throws {
+        let provider = MockProvider()
+        let registry = ProviderRegistry()
+        registry.register(provider)
+
+        let service = ConversationService(registry: registry)
+        let state = ConversationState(nodeID: UUID())
+
+        service.send(
+            prompt: "compact me",
+            to: state,
+            providerID: provider.id,
+            model: "mock-model"
+        )
+
+        provider.yield(.lifecycle(.phaseChanged(.compacting)), at: 0)
+        let didEnterCompacting = await waitForCondition {
+            state.runtimePhase == .compacting
+        }
+        XCTAssertTrue(didEnterCompacting)
+
+        provider.yield(.lifecycle(.phaseChanged(.compacted)), at: 0)
+        let didEnterCompacted = await waitForCondition {
+            state.runtimePhase == .compacted
+        }
+        XCTAssertTrue(didEnterCompacted)
+
+        provider.finish(at: 0)
+    }
+
+    @MainActor
+    func testToolEventsAppendRuntimeActivities() async throws {
+        let provider = MockProvider()
+        let registry = ProviderRegistry()
+        registry.register(provider)
+
+        let service = ConversationService(registry: registry)
+        let state = ConversationState(nodeID: UUID())
+
+        service.send(
+            prompt: "run a tool",
+            to: state,
+            providerID: provider.id,
+            model: "mock-model"
+        )
+
+        provider.yield(.initialized(sessionID: "session-1", model: "mock-model"), at: 0)
+        provider.yield(.lifecycle(.turnStarted(turnID: "turn-1")), at: 0)
+        provider.yield(.toolUse(id: "tool-1", name: "Read", input: "{\"path\":\"README.md\"}"), at: 0)
+        provider.yield(.toolResult(id: "tool-1", content: "Done", isError: false), at: 0)
+        provider.finish(at: 0)
+
+        let didRecordActivities = await waitForCondition {
+            state.runtimeActivities.contains(where: { $0.kind == .tool && $0.state == "started" && $0.summary == "Read" }) &&
+            state.runtimeActivities.contains(where: { $0.kind == .tool && $0.state == "completed" && $0.summary == "Tool completed" })
+        }
+        XCTAssertTrue(didRecordActivities)
+    }
 }
 
 // MARK: - TerminalLine Tests
@@ -795,6 +926,15 @@ final class StreamEventTests: XCTestCase {
         }
     }
 
+    func testStreamEventLifecyclePhaseChanged() throws {
+        let event = StreamEvent.lifecycle(.phaseChanged(.compacting))
+        if case .lifecycle(.phaseChanged(let phase)) = event {
+            XCTAssertEqual(phase, .compacting)
+        } else {
+            XCTFail("Expected .lifecycle phaseChanged")
+        }
+    }
+
     func testStreamEventText() throws {
         let event = StreamEvent.text("full text")
         if case .text(let t) = event {
@@ -890,12 +1030,13 @@ final class ClaudeCodeProviderTests: XCTestCase {
         XCTAssertTrue(provider.availableModels.contains { $0.id == "haiku" })
     }
 
-    func testOpusHasLargerContextWindow() throws {
+    func testClaudeModelsUseSharedEffectiveContextWindow() throws {
         let provider = ClaudeCodeProvider()
         let opus = provider.availableModels.first { $0.id == "opus" }
         let sonnet = provider.availableModels.first { $0.id == "sonnet" }
         XCTAssertNotNil(opus)
         XCTAssertNotNil(sonnet)
-        XCTAssertGreaterThan(opus!.contextWindow, sonnet!.contextWindow)
+        XCTAssertEqual(opus?.contextWindow, 200_000)
+        XCTAssertEqual(sonnet?.contextWindow, 200_000)
     }
 }

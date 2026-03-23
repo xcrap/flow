@@ -150,14 +150,16 @@ struct ProjectEditorView: View {
                     Spacer()
 
                     HStack(spacing: 6) {
-                        Button {
-                            tidyUp(project: project, viewportSize: geo.size)
-                        } label: {
-                            Image(systemName: "rectangle.3.group")
-                                .frame(width: 28, height: 28)
+                        if project.nodes.count > 1 {
+                            Button {
+                                tidyUp(project: project, viewportSize: geo.size)
+                            } label: {
+                                Image(systemName: "rectangle.3.group")
+                                    .frame(width: 28, height: 28)
+                            }
+                            .buttonStyle(.bordered)
+                            .help("Tidy up")
                         }
-                        .buttonStyle(.bordered)
-                        .help("Tidy up")
 
                         Button {
                             fitToScreen(project: project, viewportSize: geo.size)
@@ -552,6 +554,7 @@ struct ProjectEditorView: View {
 
     private func hydrate(_ target: ConversationState, with persisted: ConversationState) {
         target.messages = persisted.messages
+        target.runtimeActivities = persisted.runtimeActivities
         target.runtimePhase = .idle
         target.streamingText = ""
         target.error = nil

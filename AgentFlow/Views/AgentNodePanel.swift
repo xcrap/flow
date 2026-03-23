@@ -155,10 +155,10 @@ struct AgentNodePanel: View {
         default:
             return [
                 AIModel(id: "sonnet", name: "Sonnet (latest)", contextWindow: 200_000),
-                AIModel(id: "opus", name: "Opus (latest)", contextWindow: 1_000_000),
+                AIModel(id: "opus", name: "Opus (latest)", contextWindow: 200_000),
                 AIModel(id: "haiku", name: "Haiku (latest)", contextWindow: 200_000),
                 AIModel(id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: 200_000),
-                AIModel(id: "claude-opus-4-6", name: "Claude Opus 4.6", contextWindow: 1_000_000),
+                AIModel(id: "claude-opus-4-6", name: "Claude Opus 4.6", contextWindow: 200_000),
                 AIModel(id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", contextWindow: 200_000),
             ]
         }
@@ -186,6 +186,10 @@ struct AgentNodePanel: View {
             Color(red: 0.25, green: 0.83, blue: 0.43)
         case .preparing:
             Color(red: 0.88, green: 0.67, blue: 0.22)
+        case .compacting:
+            Color(red: 0.93, green: 0.58, blue: 0.18)
+        case .compacted:
+            Color(red: 0.48, green: 0.72, blue: 0.58)
         case .cancelling:
             .orange
         case .failed:
@@ -413,8 +417,15 @@ struct AgentNodePanel: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
-                    if conversation.messages.isEmpty && !conversation.isStreaming {
+                    if conversation.messages.isEmpty &&
+                        conversation.recentRuntimeActivities.isEmpty &&
+                        !conversation.isStreaming
+                    {
                         emptyState
+                    }
+
+                    if !conversation.recentRuntimeActivities.isEmpty {
+                        RuntimeActivityList(activities: conversation.recentRuntimeActivities)
                     }
 
                     ForEach(conversation.messages) { message in
@@ -436,6 +447,15 @@ struct AgentNodePanel: View {
             .onChange(of: conversation.messages.count) {
                 withAnimation(.easeOut(duration: 0.15)) {
                     proxy.scrollTo(conversation.messages.last?.id, anchor: .bottom)
+                }
+            }
+            .onChange(of: conversation.runtimeActivities.count) {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    if let lastMessageID = conversation.messages.last?.id {
+                        proxy.scrollTo(lastMessageID, anchor: .bottom)
+                    } else if conversation.isStreaming {
+                        proxy.scrollTo("streaming", anchor: .bottom)
+                    }
                 }
             }
             .onChange(of: conversation.streamingText) {
@@ -568,11 +588,21 @@ struct AgentNodePanel: View {
     private var hasUsageData: Bool {
         conversation.currentContextTokens != nil ||
         conversation.totalTokens > 0 ||
-        conversation.reportedContextWindow != nil
+        contextLimitForDisplay != nil
+    }
+
+    private var contextLimitForDisplay: Int? {
+        let selectedModelContextWindow = availableModels.first(where: { $0.id == selectedModel })?.contextWindow
+
+        if selectedProvider == "claude" {
+            return selectedModelContextWindow ?? conversation.reportedContextWindow
+        }
+
+        return conversation.reportedContextWindow ?? selectedModelContextWindow
     }
 
     private var usagePercent: Double? {
-        guard let contextLimit = conversation.reportedContextWindow,
+        guard let contextLimit = contextLimitForDisplay,
               contextLimit > 0,
               let currentContextTokens = conversation.currentContextTokens,
               currentContextTokens > 0 else {
@@ -597,7 +627,7 @@ struct AgentNodePanel: View {
     }
 
     private var usageStatusText: String? {
-        guard let contextLimit = conversation.reportedContextWindow,
+        guard let contextLimit = contextLimitForDisplay,
               contextLimit > 0,
               let currentContextTokens = conversation.currentContextTokens,
               currentContextTokens > 0,

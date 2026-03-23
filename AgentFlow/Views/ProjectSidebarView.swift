@@ -114,8 +114,8 @@ struct ProjectSidebarView: View {
         let agentNodes = project.nodes.values
             .filter { $0.kind == .agent }
             .sorted { lhs, rhs in
-                let lhsDate = conversations[lhs.id]?.lastActivityAt ?? .distantPast
-                let rhsDate = conversations[rhs.id]?.lastActivityAt ?? .distantPast
+                let lhsDate = conversations[lhs.id]?.lastVisibleActivityAt ?? .distantPast
+                let rhsDate = conversations[rhs.id]?.lastVisibleActivityAt ?? .distantPast
                 if lhsDate != rhsDate {
                     return lhsDate > rhsDate
                 }
@@ -226,6 +226,10 @@ struct ProjectSidebarView: View {
             Color(red: 0.24, green: 0.82, blue: 0.43)
         case .preparing:
             Color(red: 0.88, green: 0.67, blue: 0.22)
+        case .compacting:
+            Color(red: 0.93, green: 0.58, blue: 0.18)
+        case .compacted:
+            Color(red: 0.48, green: 0.72, blue: 0.58)
         case .cancelling:
             Color.orange
         case .failed:
@@ -233,7 +237,8 @@ struct ProjectSidebarView: View {
         case .idle:
             Color.white.opacity(0.34)
         }
-        let previewText = (conversation?.latestPreviewText?.isEmpty == false ? conversation?.latestPreviewText : nil)
+        let previewText = (isWorking ? conversation?.latestRuntimeActivity?.summary : nil)
+            ?? (conversation?.latestPreviewText?.isEmpty == false ? conversation?.latestPreviewText : nil)
             ?? "Start a conversation"
         let queuedPromptCount = conversation?.queuedPromptCount ?? 0
 
@@ -266,7 +271,7 @@ struct ProjectSidebarView: View {
                             .lineLimit(2)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
-                        Text(relativeTimestamp(conversation?.lastActivityAt))
+                        Text(relativeTimestamp(conversation?.lastVisibleActivityAt))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.white.opacity(0.48))
                     }

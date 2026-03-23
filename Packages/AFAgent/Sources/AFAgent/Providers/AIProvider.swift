@@ -7,12 +7,14 @@ public enum ProviderSessionPhase: String, Codable, Sendable {
     case idle
     case preparing
     case responding
+    case compacting
+    case compacted
     case cancelling
     case failed
 
     public var isWorking: Bool {
         switch self {
-        case .preparing, .responding, .cancelling:
+        case .preparing, .responding, .compacting, .compacted, .cancelling:
             true
         case .idle, .failed:
             false
@@ -27,6 +29,10 @@ public enum ProviderSessionPhase: String, Codable, Sendable {
             "Starting"
         case .responding:
             "Working"
+        case .compacting:
+            "Compacting"
+        case .compacted:
+            "Compacted"
         case .cancelling:
             "Stopping"
         case .failed:
@@ -37,6 +43,7 @@ public enum ProviderSessionPhase: String, Codable, Sendable {
 
 public enum ProviderLifecycleEvent: Sendable, Equatable {
     case turnStarted(turnID: String?)
+    case phaseChanged(ProviderSessionPhase)
 }
 
 public struct ProviderStreamHandle: Sendable {

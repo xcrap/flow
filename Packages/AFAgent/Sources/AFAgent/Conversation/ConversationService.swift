@@ -93,6 +93,14 @@ public final class ConversationService {
 
         guard let provider = registry.provider(for: request.providerID) else {
             conversationState.setError("Provider '\(request.providerID)' not found. Configure it in Settings.")
+            conversationState.recordRuntimeActivity(
+                kind: .error,
+                tone: .error,
+                summary: "Provider unavailable",
+                detail: "Provider '\(request.providerID)' not found. Configure it in Settings.",
+                state: "failed",
+                turnID: conversationState.activeTurnID
+            )
             request.onComplete?()
             startNextRequestIfNeeded(for: conversationState)
             return
@@ -127,12 +135,39 @@ public final class ConversationService {
 
                     switch event {
                     case .initialized(let sessionID, let model):
+                        let previousSessionID = conversationState.sessionID
+                        let previousModelID = conversationState.activeModelID
                         conversationState.registerSession(sessionID, modelID: model)
+                        if previousSessionID != sessionID || previousModelID != model {
+                            let sessionDetail = [provider.displayName, model]
+                                .filter { !$0.isEmpty }
+                                .joined(separator: " • ")
+                            conversationState.recordRuntimeActivity(
+                                kind: .session,
+                                tone: .success,
+                                summary: "Session ready",
+                                detail: sessionDetail.isEmpty ? nil : sessionDetail,
+                                state: "configured",
+                                turnID: conversationState.activeTurnID
+                            )
+                        }
 
                     case .lifecycle(let lifecycleEvent):
                         switch lifecycleEvent {
                         case .turnStarted(let turnID):
                             conversationState.markTurnStarted(turnID: turnID)
+                        case .phaseChanged(let phase):
+                            conversationState.applyLifecyclePhase(phase)
+                            if phase == .compacting || phase == .compacted {
+                                conversationState.recordRuntimeActivity(
+                                    kind: .contextCompaction,
+                                    tone: phase == .compacting ? .working : .success,
+                                    summary: phase == .compacting ? "Context compacting" : "Context compacted",
+                                    detail: Self.usageDetail(for: conversationState),
+                                    state: phase.rawValue,
+                                    turnID: conversationState.activeTurnID
+                                )
+                            }
                         }
 
                     case .textDelta(let delta):
@@ -142,6 +177,14 @@ public final class ConversationService {
                         conversationState.appendStreamDelta(text)
 
                     case .toolUse(let id, let name, let input):
+                        conversationState.recordRuntimeActivity(
+                            kind: .tool,
+                            tone: .working,
+                            summary: name,
+                            detail: Self.summarizedRuntimeText(input),
+                            state: "started",
+                            turnID: conversationState.activeTurnID
+                        )
                         let toolMessage = ConversationMessage(
                             role: .assistant,
                             content: [.toolUse(id: id, name: name, input: input)]
@@ -158,6 +201,14 @@ public final class ConversationService {
                         conversationState.messages.append(toolMessage)
 
                     case .toolResult(let id, let content, let isError):
+                        conversationState.recordRuntimeActivity(
+                            kind: .tool,
+                            tone: isError ? .error : .success,
+                            summary: isError ? "Tool failed" : "Tool completed",
+                            detail: Self.summarizedRuntimeText(content),
+                            state: isError ? "failed" : "completed",
+                            turnID: conversationState.activeTurnID
+                        )
                         let resultMessage = ConversationMessage(
                             role: .tool,
                             content: [.toolResult(id: id, content: content, isError: isError)]
@@ -224,12 +275,28 @@ public final class ConversationService {
                     case .error(let message):
                         didReceiveError = true
                         conversationState.setError(message)
+                        conversationState.recordRuntimeActivity(
+                            kind: .error,
+                            tone: .error,
+                            summary: "Runtime error",
+                            detail: message,
+                            state: "failed",
+                            turnID: conversationState.activeTurnID
+                        )
                     }
                 }
             } catch {
                 if !Task.isCancelled {
                     didReceiveError = true
                     conversationState.setError(error.localizedDescription)
+                    conversationState.recordRuntimeActivity(
+                        kind: .error,
+                        tone: .error,
+                        summary: "Runtime error",
+                        detail: error.localizedDescription,
+                        state: "failed",
+                        turnID: conversationState.activeTurnID
+                    )
                 }
             }
 
@@ -264,5 +331,46 @@ public final class ConversationService {
         let next = queue.removeFirst()
         pendingRequests[nodeID] = queue.isEmpty ? nil : queue
         start(next, for: conversationState)
+    }
+
+    private static func summarizedRuntimeText(_ text: String?, limit: Int = 140) -> String? {
+        guard let text else { return nil }
+
+        let normalized = text
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\t", with: " ")
+            .replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !normalized.isEmpty else { return nil }
+        guard normalized.count > limit else { return normalized }
+
+        let endIndex = normalized.index(normalized.startIndex, offsetBy: limit)
+        return String(normalized[..<endIndex]) + "…"
+    }
+
+    private static func usageDetail(for conversationState: ConversationState) -> String? {
+        guard let currentContextTokens = conversationState.currentContextTokens,
+              let contextLimit = conversationState.reportedContextWindow,
+              currentContextTokens > 0,
+              contextLimit > 0
+        else {
+            return nil
+        }
+
+        return "\(formatTokenCount(currentContextTokens)) of \(formatTokenCount(contextLimit))"
+    }
+
+    private static func formatTokenCount(_ count: Int) -> String {
+        switch count {
+        case 1_000_000...:
+            return String(format: "%.1fM", Double(count) / 1_000_000).replacingOccurrences(of: ".0", with: "")
+        case 10_000...:
+            return String(format: "%.1fK", Double(count) / 1_000).replacingOccurrences(of: ".0", with: "")
+        case 1_000...:
+            return "\(count / 1_000)K"
+        default:
+            return "\(count)"
+        }
     }
 }
