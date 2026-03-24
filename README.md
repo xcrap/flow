@@ -4,6 +4,8 @@ A native macOS app for orchestrating AI agents and terminals on an infinite canv
 
 ![Flow](https://img.shields.io/badge/macOS-26+-blue) ![Swift](https://img.shields.io/badge/Swift-6-orange) ![Tests](https://img.shields.io/badge/tests-187%20passing-green)
 
+![screenshot](screenshot.png)
+
 ## Features
 
 - **Infinite Canvas** — Drag, zoom, pan. Place AI agents and terminals anywhere.

@@ -39,10 +39,6 @@ struct FlowApp: App {
                 return nil
 
             case "c":
-                // Allow copy in text fields
-                if let responder = NSApp.keyWindow?.firstResponder, responder is NSTextView {
-                    return event
-                }
                 guard let project = appState.activeProject, !project.nodes.isEmpty else { return nil }
                 let nodes = Array(project.nodes.values)
                 var minX = Double.infinity, minY = Double.infinity
