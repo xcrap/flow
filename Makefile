@@ -1,14 +1,30 @@
-.PHONY: build run test clean generate
+.PHONY: dev build install run test clean generate
 
 generate:
 	xcodegen generate
 
+# Debug build for development (bundle: com.flow.app.dev, data: ~/Library/Application Support/Flow-Dev/)
+dev: generate
+	xcodebuild -project Flow.xcodeproj -scheme Flow -configuration Debug -derivedDataPath build/dev -quiet
+	mkdir -p dist
+	rm -rf dist/Flow.app
+	cp -R build/dev/Build/Products/Debug/Flow.app dist/Flow.app
+	open dist/Flow.app
+
+# Release build
 build: generate
 	xcodebuild archive -project Flow.xcodeproj -scheme Flow -configuration Release -archivePath build/Flow.xcarchive -quiet
 	mkdir -p dist
 	rm -rf dist/Flow.app
 	cp -R build/Flow.xcarchive/Products/Applications/Flow.app dist/Flow.app
 
+# Install release build to /Applications
+install: build
+	rm -rf /Applications/Flow.app
+	cp -R dist/Flow.app /Applications/Flow.app
+	@echo "Installed to /Applications/Flow.app"
+
+# Build release and open
 run: build
 	open dist/Flow.app
 

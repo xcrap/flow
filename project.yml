@@ -36,12 +36,16 @@ targets:
       - Flow
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.flow.app
         PRODUCT_NAME: Flow
         INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.developer-tools"
         INFOPLIST_KEY_CFBundleDisplayName: Flow
         GENERATE_INFOPLIST_FILE: true
         CODE_SIGN_ENTITLEMENTS: Flow/Flow.entitlements
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: com.flow.app.dev
+        Release:
+          PRODUCT_BUNDLE_IDENTIFIER: com.flow.app
     dependencies:
       - package: AFCore
       - package: AFCanvas
