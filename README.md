@@ -1,8 +1,8 @@
-# AgentFlow
+# Flow
 
 A native macOS app for orchestrating AI agents and terminals on an infinite canvas. Built with Swift 6 and SwiftUI for macOS 26 (Tahoe).
 
-![AgentFlow](https://img.shields.io/badge/macOS-26+-blue) ![Swift](https://img.shields.io/badge/Swift-6-orange) ![Tests](https://img.shields.io/badge/tests-187%20passing-green)
+![Flow](https://img.shields.io/badge/macOS-26+-blue) ![Swift](https://img.shields.io/badge/Swift-6-orange) ![Tests](https://img.shields.io/badge/tests-187%20passing-green)
 
 ## Features
 
@@ -30,7 +30,7 @@ A native macOS app for orchestrating AI agents and terminals on an infinite canv
 
 ```bash
 xcodegen generate
-open AgentFlow.xcodeproj
+open Flow.xcodeproj
 # Cmd+R to build and run
 ```
 
@@ -41,33 +41,33 @@ open AgentFlow.xcodeproj
 xcodegen generate
 
 # Build release
-xcodebuild -project AgentFlow.xcodeproj \
-  -scheme AgentFlow \
+xcodebuild -project Flow.xcodeproj \
+  -scheme Flow \
   -configuration Release \
   -derivedDataPath build \
   build
 
 # The app bundle is at:
-# build/Build/Products/Release/AgentFlow.app
+# build/Build/Products/Release/Flow.app
 
 # Run it
-open build/Build/Products/Release/AgentFlow.app
+open build/Build/Products/Release/Flow.app
 ```
 
 ### Bundle for Distribution
 
 ```bash
 # Archive
-xcodebuild -project AgentFlow.xcodeproj \
-  -scheme AgentFlow \
+xcodebuild -project Flow.xcodeproj \
+  -scheme Flow \
   -configuration Release \
   -derivedDataPath build \
   archive \
-  -archivePath build/AgentFlow.xcarchive
+  -archivePath build/Flow.xcarchive
 
 # Export app from archive
 xcodebuild -exportArchive \
-  -archivePath build/AgentFlow.xcarchive \
+  -archivePath build/Flow.xcarchive \
   -exportPath build/export \
   -exportOptionsPlist ExportOptions.plist
 ```
@@ -95,6 +95,8 @@ cd Packages/AFAgent && swift test
 | `Cmd+N` | New project |
 | `Cmd+K` | Command palette |
 | `Cmd+B` | Toggle sidebar |
+| `Cmd+W` | Close selected node |
+| `Cmd+C` | Fit to screen |
 | `Cmd+D` | Duplicate node |
 | `Cmd+Plus` | Zoom in |
 | `Cmd+Minus` | Zoom out |

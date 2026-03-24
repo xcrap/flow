@@ -68,7 +68,7 @@ struct ProjectEditorView: View {
                 }
             }
         }
-        .navigationTitle(activeProject?.project.name ?? "AgentFlow")
+        .navigationTitle(activeProject?.project.name ?? "Flow")
         .toolbar {
             toolbarContent
         }

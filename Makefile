@@ -4,10 +4,10 @@ generate:
 	xcodegen generate
 
 build: generate
-	xcodebuild -project AgentFlow.xcodeproj -scheme AgentFlow -configuration Release -derivedDataPath build build -quiet
+	xcodebuild -project Flow.xcodeproj -scheme Flow -configuration Release -derivedDataPath build build -quiet
 
 run: build
-	open build/Build/Products/Release/AgentFlow.app
+	open build/Build/Products/Release/Flow.app
 
 test:
 	cd Packages/AFCore && swift test --quiet
@@ -17,5 +17,5 @@ test:
 
 clean:
 	rm -rf build
-	xcodebuild -project AgentFlow.xcodeproj -scheme AgentFlow clean -quiet 2>/dev/null || true
+	xcodebuild -project Flow.xcodeproj -scheme Flow clean -quiet 2>/dev/null || true
 	@echo "Clean."

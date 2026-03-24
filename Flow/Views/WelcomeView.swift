@@ -9,7 +9,7 @@ struct WelcomeView: View {
                 .font(.system(size: 56))
                 .foregroundStyle(.purple.opacity(0.5))
 
-            Text("AgentFlow")
+            Text("Flow")
                 .font(.system(size: 32, weight: .bold))
 
             Text("AI agents and terminals on an infinite canvas")

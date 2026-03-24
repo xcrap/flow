@@ -107,7 +107,7 @@ struct PersistedProjectData: Codable {
 enum ConversationPersistence {
     private static var baseDir: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = appSupport.appendingPathComponent("AgentFlow/conversations", isDirectory: true)
+        let dir = appSupport.appendingPathComponent("Flow/conversations", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }

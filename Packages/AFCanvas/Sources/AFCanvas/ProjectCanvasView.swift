@@ -4,6 +4,7 @@ import AFCore
 public struct ProjectCanvasView<NodeContent: View>: View {
     @Bindable var projectState: ProjectState
     @State private var panStart: CGPoint?
+    @State private var zoomStart: Double?
     let nodeContent: (WorkflowNode, Bool, Bool) -> NodeContent
 
     public init(
@@ -35,18 +36,18 @@ public struct ProjectCanvasView<NodeContent: View>: View {
             }
             .gesture(canvasZoomGesture)
             .canvasEventMonitor(
-                onZoomScroll: { [projectState] delta in
+                onZoomScroll: { [projectState] delta, mouseLocation in
                     let oldZoom = projectState.canvasState.zoom
                     let factor = 1.0 + (delta.y * 0.01)
                     let newZoom = max(0.1, min(3.0, oldZoom * factor))
 
-                    let cx = geometry.size.width / 2
-                    let cy = geometry.size.height / 2
                     let offset = projectState.canvasState.offset
 
+                    // Zoom toward mouse pointer: keep the canvas point under
+                    // the cursor fixed in screen space
                     projectState.canvasState.offset = CGPoint(
-                        x: cx - (cx - offset.x) * (newZoom / oldZoom),
-                        y: cy - (cy - offset.y) * (newZoom / oldZoom)
+                        x: mouseLocation.x - (mouseLocation.x - offset.x) * (newZoom / oldZoom),
+                        y: mouseLocation.y - (mouseLocation.y - offset.y) * (newZoom / oldZoom)
                     )
                     projectState.canvasState.zoom = newZoom
                     projectState.onChange?()
@@ -93,19 +94,55 @@ public struct ProjectCanvasView<NodeContent: View>: View {
     private var canvasZoomGesture: some Gesture {
         MagnifyGesture()
             .onChanged { value in
-                let newZoom = max(0.1, min(3.0, projectState.canvasState.zoom * value.magnification))
+                if zoomStart == nil {
+                    zoomStart = projectState.canvasState.zoom
+                }
+                let baseZoom = zoomStart ?? projectState.canvasState.zoom
+                let oldZoom = projectState.canvasState.zoom
+                let newZoom = max(0.1, min(3.0, baseZoom * value.magnification))
+
+                // Zoom toward viewport center (best approximation for trackpad pinch)
+                let vp = projectState.canvasState.viewportSize
+                let cx = vp.width / 2
+                let cy = vp.height / 2
+                let offset = projectState.canvasState.offset
+                projectState.canvasState.offset = CGPoint(
+                    x: cx - (cx - offset.x) * (newZoom / oldZoom),
+                    y: cy - (cy - offset.y) * (newZoom / oldZoom)
+                )
                 projectState.canvasState.zoom = newZoom
             }
             .onEnded { _ in
+                zoomStart = nil
                 projectState.onChange?()
             }
     }
 }
 
+// MARK: - NSView Anchor for Coordinate Conversion
+
+/// Holds a reference to an NSView placed inside the canvas so that
+/// NSEvent window coordinates can be converted to canvas-local coordinates.
+final class CanvasViewAnchor: @unchecked Sendable {
+    var view: NSView?
+}
+
+private struct CanvasAnchorRepresentable: NSViewRepresentable {
+    let anchor: CanvasViewAnchor
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        anchor.view = view
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
 // MARK: - Scroll Wheel Modifier
 
 struct CanvasEventMonitor: ViewModifier {
-    let onZoomScroll: (CGPoint) -> Void
+    let onZoomScroll: (_ delta: CGPoint, _ mouseLocation: CGPoint) -> Void
     let onPanDelta: (CGPoint) -> Void
     let onPanEnd: () -> Void
     @State private var scrollMonitor: Any?
@@ -113,13 +150,21 @@ struct CanvasEventMonitor: ViewModifier {
     @State private var dragMonitor: Any?
     @State private var dragUpMonitor: Any?
     @State private var isPanning = false
+    @State private var anchor = CanvasViewAnchor()
 
     func body(content: Content) -> some View {
         content
+            .background(CanvasAnchorRepresentable(anchor: anchor))
             .onAppear {
-                scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+                scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [anchor] event in
                     if event.modifierFlags.contains(.command) {
-                        onZoomScroll(CGPoint(x: 0, y: event.scrollingDeltaY))
+                        // Convert window coordinates to canvas-local (flipped Y for SwiftUI)
+                        var mousePos = CGPoint.zero
+                        if let view = anchor.view {
+                            let viewLoc = view.convert(event.locationInWindow, from: nil)
+                            mousePos = CGPoint(x: viewLoc.x, y: view.bounds.height - viewLoc.y)
+                        }
+                        onZoomScroll(CGPoint(x: 0, y: event.scrollingDeltaY), mousePos)
                         return nil
                     }
                     return event
@@ -164,7 +209,7 @@ struct CanvasEventMonitor: ViewModifier {
 }
 
 extension View {
-    func onScrollGesture(handler: @escaping (CGPoint) -> Void) -> some View {
+    func onScrollGesture(handler: @escaping (_ delta: CGPoint, _ mouseLocation: CGPoint) -> Void) -> some View {
         modifier(CanvasEventMonitor(
             onZoomScroll: handler,
             onPanDelta: { _ in },
@@ -173,7 +218,7 @@ extension View {
     }
 
     func canvasEventMonitor(
-        onZoomScroll: @escaping (CGPoint) -> Void,
+        onZoomScroll: @escaping (_ delta: CGPoint, _ mouseLocation: CGPoint) -> Void,
         onPanDelta: @escaping (CGPoint) -> Void,
         onPanEnd: @escaping () -> Void
     ) -> some View {

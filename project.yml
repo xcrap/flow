@@ -1,6 +1,6 @@
-name: AgentFlow
+name: Flow
 options:
-  bundleIdPrefix: com.agentflow
+  bundleIdPrefix: com.flow
   deploymentTarget:
     macOS: "26.0"
   xcodeVersion: "16.0"
@@ -29,19 +29,19 @@ packages:
     path: Packages/AFDiff
 
 targets:
-  AgentFlow:
+  Flow:
     type: application
     platform: macOS
     sources:
-      - AgentFlow
+      - Flow
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.agentflow.app
-        PRODUCT_NAME: AgentFlow
+        PRODUCT_BUNDLE_IDENTIFIER: com.flow.app
+        PRODUCT_NAME: Flow
         INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.developer-tools"
-        INFOPLIST_KEY_CFBundleDisplayName: AgentFlow
+        INFOPLIST_KEY_CFBundleDisplayName: Flow
         GENERATE_INFOPLIST_FILE: true
-        CODE_SIGN_ENTITLEMENTS: AgentFlow/AgentFlow.entitlements
+        CODE_SIGN_ENTITLEMENTS: Flow/Flow.entitlements
     dependencies:
       - package: AFCore
       - package: AFCanvas
@@ -50,7 +50,7 @@ targets:
       - package: AFPersistence
       - package: AFDiff
     entitlements:
-      path: AgentFlow/AgentFlow.entitlements
+      path: Flow/Flow.entitlements
       properties:
         com.apple.security.app-sandbox: false
         com.apple.security.network.client: true

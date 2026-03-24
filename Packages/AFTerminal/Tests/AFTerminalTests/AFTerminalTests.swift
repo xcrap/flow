@@ -7,9 +7,9 @@ private func sleepBriefly(_ milliseconds: UInt64) async {
 }
 
 @Test @MainActor func sessionUsesProvidedDirectory() async throws {
-    let session = TerminalSession(id: UUID(), currentDirectory: "/tmp/agentflow-terminal-test")
-    #expect(session.currentDirectory == "/tmp/agentflow-terminal-test")
-    #expect(session.launchDirectory == "/tmp/agentflow-terminal-test")
+    let session = TerminalSession(id: UUID(), currentDirectory: "/tmp/flow-terminal-test")
+    #expect(session.currentDirectory == "/tmp/flow-terminal-test")
+    #expect(session.launchDirectory == "/tmp/flow-terminal-test")
     #expect(session.isRunning == false)
 }
 

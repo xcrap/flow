@@ -21,7 +21,7 @@ struct PersistedAppState: Codable {
 public final class ProjectPersistence {
     private static var saveURL: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = appSupport.appendingPathComponent("AgentFlow", isDirectory: true)
+        let dir = appSupport.appendingPathComponent("Flow", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("projects.json")
     }

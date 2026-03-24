@@ -224,7 +224,7 @@ private actor CodexSession {
         }
 
         writeJSON("initialize", id: 0, params: [
-            "clientInfo": ["name": "AgentFlow", "version": "1.0"]
+            "clientInfo": ["name": "Flow", "version": "1.0"]
         ])
     }
 

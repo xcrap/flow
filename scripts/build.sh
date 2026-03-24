@@ -6,15 +6,15 @@ cd "$(dirname "$0")/.."
 echo "==> Generating Xcode project..."
 xcodegen generate
 
-echo "==> Building AgentFlow (Release)..."
-xcodebuild -project AgentFlow.xcodeproj \
-  -scheme AgentFlow \
+echo "==> Building Flow (Release)..."
+xcodebuild -project Flow.xcodeproj \
+  -scheme Flow \
   -configuration Release \
   -derivedDataPath build \
   build \
   -quiet
 
-APP_PATH="build/Build/Products/Release/AgentFlow.app"
+APP_PATH="build/Build/Products/Release/Flow.app"
 echo "==> Build complete: $APP_PATH"
 echo ""
 echo "Run with: open $APP_PATH"

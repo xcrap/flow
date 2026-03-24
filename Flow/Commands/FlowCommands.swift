@@ -2,7 +2,7 @@ import SwiftUI
 import AFCore
 import AFCanvas
 
-struct AgentFlowCommands: Commands {
+struct FlowCommands: Commands {
     let appState: AppState
     @Binding var sidebarVisible: Bool
     @Binding var showCommandPalette: Bool
@@ -40,6 +40,15 @@ struct AgentFlowCommands: Commands {
                 showCommandPalette.toggle()
             }
             .keyboardShortcut("k", modifiers: .command)
+
+            Divider()
+
+            Button("Close Node") {
+                if let project = appState.activeProject, !project.selectedNodeIDs.isEmpty {
+                    project.deleteSelected()
+                }
+            }
+            .keyboardShortcut("w", modifiers: .command)
         }
 
         CommandGroup(after: .pasteboard) {
@@ -87,6 +96,45 @@ struct AgentFlowCommands: Commands {
                 }
             }
             .keyboardShortcut("0", modifiers: .command)
+
+            Button("Fit to Screen") {
+                fitToScreen()
+            }
+            .keyboardShortcut("c", modifiers: .command)
+        }
+    }
+
+    private func fitToScreen() {
+        guard let project = appState.activeProject, !project.nodes.isEmpty else { return }
+
+        let nodes = Array(project.nodes.values)
+        var minX = Double.infinity, minY = Double.infinity
+        var maxX = -Double.infinity, maxY = -Double.infinity
+
+        for node in nodes {
+            minX = min(minX, node.position.x - node.position.width / 2)
+            minY = min(minY, node.position.y - node.position.height / 2)
+            maxX = max(maxX, node.position.x + node.position.width / 2)
+            maxY = max(maxY, node.position.y + node.position.height / 2)
+        }
+
+        let contentWidth = max(1, maxX - minX)
+        let contentHeight = max(1, maxY - minY)
+        let padding: Double = 60
+        let viewportSize = project.canvasState.viewportSize
+
+        let availW = max(1, viewportSize.width - padding * 2)
+        let availH = max(1, viewportSize.height - padding * 2)
+        let newZoom = max(0.15, min(1.5, min(availW / contentWidth, availH / contentHeight)))
+
+        let cx = (minX + maxX) / 2
+        let cy = (minY + maxY) / 2
+        let newOffsetX = viewportSize.width / 2 - cx * newZoom
+        let newOffsetY = viewportSize.height / 2 - cy * newZoom
+
+        withAnimation(.spring(duration: 0.4)) {
+            project.canvasState.zoom = newZoom
+            project.canvasState.offset = CGPoint(x: newOffsetX, y: newOffsetY)
         }
     }
 
