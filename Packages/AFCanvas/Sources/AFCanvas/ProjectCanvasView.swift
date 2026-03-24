@@ -28,6 +28,7 @@ public struct ProjectCanvasView<NodeContent: View>: View {
                         AnyView(nodeContent(node, isSelected, isTitleHovered))
                     }
                 )
+
             }
             .background {
                 ClickDetectorOverlay(projectState: projectState)

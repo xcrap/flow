@@ -141,15 +141,32 @@ struct ProjectEditorView: View {
                 .id(project.project.id) // Force full recreation on project switch
                 .onAppear {
                     canvasViewportSize = geo.size
+                    project.canvasState.viewportSize = geo.size
                 }
                 .onChange(of: geo.size) { _, newSize in
                     canvasViewportSize = newSize
+                    project.canvasState.viewportSize = newSize
                 }
 
                 HStack {
                     Spacer()
 
                     HStack(spacing: 6) {
+                        if project.canvasState.zoom != 1.0 {
+                            Button {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    project.canvasState.resetZoom(in: geo.size)
+                                    project.onChange?()
+                                }
+                            } label: {
+                                Text("\(Int(round(project.canvasState.zoom * 100)))%")
+                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                    .frame(height: 28)
+                            }
+                            .buttonStyle(.bordered)
+                            .help("Reset zoom (⌘0)")
+                        }
+
                         if project.nodes.count > 1 {
                             Button {
                                 tidyUp(project: project, viewportSize: geo.size)
@@ -197,8 +214,7 @@ struct ProjectEditorView: View {
         case .zoomOut:
             project.canvasState.zoom = max(0.1, project.canvasState.zoom - 0.25)
         case .resetZoom:
-            project.canvasState.zoom = 1.0
-            project.canvasState.offset = .zero
+            project.canvasState.resetZoom(in: canvasViewportSize)
         case .newProject:
             let panel = NSOpenPanel()
             panel.canChooseFiles = false

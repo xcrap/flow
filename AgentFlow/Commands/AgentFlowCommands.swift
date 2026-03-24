@@ -71,8 +71,7 @@ struct AgentFlowCommands: Commands {
 
             Button("Reset Zoom") {
                 if let project = appState.activeProject {
-                    project.canvasState.zoom = 1.0
-                    project.canvasState.offset = .zero
+                    project.canvasState.resetZoom(in: project.canvasState.viewportSize)
                 }
             }
             .keyboardShortcut("0", modifiers: .command)

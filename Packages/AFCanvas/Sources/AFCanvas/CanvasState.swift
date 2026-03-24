@@ -14,6 +14,7 @@ public final class CanvasState {
     public var connectionDraftEndPoint: CGPoint?
     public var marqueeOrigin: CGPoint?
     public var marqueeRect: CGRect?
+    public var viewportSize: CGSize = CGSize(width: 900, height: 700)
 
     public init() {}
 
@@ -42,6 +43,23 @@ public final class CanvasState {
             x: viewportSize.width / 2 - canvasPoint.x * resolvedZoom,
             y: viewportSize.height / 2 - canvasPoint.y * resolvedZoom
         )
+    }
+
+    /// Reset zoom to 1.0 while keeping the viewport center fixed.
+    public func resetZoom(in viewportSize: CGSize) {
+        let oldZoom = zoom
+        guard oldZoom != 1.0 else { return }
+        // Canvas point currently at screen center
+        let cx = viewportSize.width / 2
+        let cy = viewportSize.height / 2
+        let canvasCenterX = (cx - offset.x) / oldZoom
+        let canvasCenterY = (cy - offset.y) / oldZoom
+        // New offset so that same canvas point stays at screen center with zoom = 1
+        offset = CGPoint(
+            x: cx - canvasCenterX,
+            y: cy - canvasCenterY
+        )
+        zoom = 1.0
     }
 
     public func visibleRect(in size: CGSize) -> CGRect {
