@@ -4,10 +4,13 @@ generate:
 	xcodegen generate
 
 build: generate
-	xcodebuild -project Flow.xcodeproj -scheme Flow -configuration Release -derivedDataPath build build -quiet
+	xcodebuild archive -project Flow.xcodeproj -scheme Flow -configuration Release -archivePath build/Flow.xcarchive -quiet
+	mkdir -p dist
+	rm -rf dist/Flow.app
+	cp -R build/Flow.xcarchive/Products/Applications/Flow.app dist/Flow.app
 
 run: build
-	open build/Build/Products/Release/Flow.app
+	open dist/Flow.app
 
 test:
 	cd Packages/AFCore && swift test --quiet
@@ -16,6 +19,6 @@ test:
 	@echo "All tests passed."
 
 clean:
-	rm -rf build
+	rm -rf build dist
 	xcodebuild -project Flow.xcodeproj -scheme Flow clean -quiet 2>/dev/null || true
 	@echo "Clean."
