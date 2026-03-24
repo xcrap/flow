@@ -7,6 +7,7 @@ public final class CanvasState {
     public var offset: CGPoint = .zero
     public var zoom: Double = 1.0
     public var gridSize: Double = 20.0
+    public var showGrid: Bool = true
     public var isDragging: Bool = false
     public var draggedNodeID: UUID?
     public var isDrawingConnection: Bool = false

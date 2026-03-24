@@ -7,7 +7,9 @@ import AFTerminal
 struct ProjectEditorView: View {
     @Environment(AppState.self) private var appState
     @Environment(ProviderRegistry.self) private var providerRegistry
+    @Environment(GitStatusService.self) private var gitStatus
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("gridVisible") private var gridVisible = true
     @Binding var sidebarVisible: Bool
     @Binding var showCommandPalette: Bool
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -15,14 +17,19 @@ struct ProjectEditorView: View {
     @State private var conversationsByProject: [UUID: [UUID: ConversationState]] = [:]
     @State private var terminalSessionsByProject: [UUID: [UUID: TerminalSession]] = [:]
     @State private var conversationService: ConversationService?
-    @State private var gitService = GitService()
     @State private var showCommitSheet = false
     @State private var commitMessage = ""
+    @State private var includeUntracked = false
     @State private var canvasViewportSize: CGSize = CGSize(width: 900, height: 700)
     @State private var loadedPersistenceProjectIDs: Set<UUID> = []
 
     private var activeProject: ProjectState? {
         appState.activeProject
+    }
+
+    private var activeGit: GitStatusService.GitInfo {
+        guard let id = activeProject?.project.id else { return GitStatusService.GitInfo() }
+        return gitStatus.info[id] ?? GitStatusService.GitInfo()
     }
 
     private var activeConversations: [UUID: ConversationState] {
@@ -94,7 +101,11 @@ struct ProjectEditorView: View {
             }
         }
         .onChange(of: scenePhase) { _, newPhase in
-            if newPhase != .active {
+            if newPhase == .active {
+                if let id = activeProject?.project.id {
+                    gitStatus.forceRefresh(projectID: id)
+                }
+            } else {
                 flushAllPersistence()
             }
         }
@@ -103,6 +114,9 @@ struct ProjectEditorView: View {
         }
         .sheet(isPresented: $showCommitSheet) {
             commitSheet
+        }
+        .onChange(of: gridVisible) {
+            activeProject?.canvasState.showGrid = gridVisible
         }
         .onChange(of: sidebarVisible) {
             withAnimation {
@@ -479,9 +493,10 @@ struct ProjectEditorView: View {
 
     private func prepareProjectForDisplay(_ project: ProjectState) {
         appState.sidebarSelection = .project(project.project.id)
+        project.canvasState.showGrid = gridVisible
         loadConversations(for: project)
         ensureSessionsExist(for: project)
-        gitService.configure(rootPath: project.project.rootPath)
+        gitStatus.startPolling(projectID: project.project.id, rootPath: project.project.rootPath)
     }
 
     private func loadConversations(for project: ProjectState) {
@@ -684,18 +699,18 @@ struct ProjectEditorView: View {
         }
 
         // Git status
-        if gitService.isGitRepo {
+        if activeGit.isGitRepo {
             ToolbarItemGroup(placement: .automatic) {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.triangle.branch")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
-                    Text(gitService.branch)
+                    Text(activeGit.branch)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
 
-                    if gitService.changedFiles > 0 {
-                        Text("\(gitService.changedFiles)")
+                    if activeGit.statusFileCount > 0 {
+                        Text("\(activeGit.statusFileCount)")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 5)
@@ -709,16 +724,20 @@ struct ProjectEditorView: View {
                 } label: {
                     Label("Commit", systemImage: "checkmark.circle")
                 }
-                .disabled(gitService.changedFiles == 0)
+                .disabled(activeGit.statusFileCount == 0)
 
                 Button {
-                    Task { _ = await gitService.push() }
+                    if let id = activeProject?.project.id {
+                        Task { _ = await gitStatus.push(projectID: id) }
+                    }
                 } label: {
                     Label("Push", systemImage: "arrow.up.circle")
                 }
 
                 Button {
-                    gitService.refresh()
+                    if let id = activeProject?.project.id {
+                        gitStatus.forceRefresh(projectID: id)
+                    }
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
@@ -729,20 +748,62 @@ struct ProjectEditorView: View {
     // MARK: - Commit Sheet
 
     private var commitSheet: some View {
-        VStack(spacing: 16) {
-            Text("Commit Changes")
-                .font(.headline)
+        let trackedFiles = activeGit.files.filter { !$0.isUntracked }
+        let untrackedFiles = activeGit.files.filter { $0.isUntracked }
+        let commitFileCount = includeUntracked ? activeGit.statusFileCount : trackedFiles.count
 
-            Text("\(gitService.changedFiles) file(s) changed")
+        return VStack(alignment: .leading, spacing: 16) {
+            Text("Commit Changes")
+                .font(.title3.weight(.semibold))
+                .frame(maxWidth: .infinity, alignment: .center)
+
+            // File list
+            if !activeGit.files.isEmpty {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 2) {
+                        if !trackedFiles.isEmpty {
+                            ForEach(trackedFiles) { file in
+                                fileRow(file)
+                            }
+                        }
+
+                        if !untrackedFiles.isEmpty {
+                            HStack(spacing: 8) {
+                                Toggle("Include untracked files", isOn: $includeUntracked)
+                                    .toggleStyle(.checkbox)
+                                    .font(.system(size: 12, weight: .medium))
+                                Spacer()
+                                Text("\(untrackedFiles.count) file(s)")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.top, 8)
+                            .padding(.bottom, 4)
+
+                            if includeUntracked {
+                                ForEach(untrackedFiles) { file in
+                                    fileRow(file)
+                                }
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 200)
+            }
+
+            Text("\(commitFileCount) file(s) will be committed")
+                .font(.system(size: 12))
                 .foregroundStyle(.secondary)
 
             TextField("Commit message", text: $commitMessage, axis: .vertical)
                 .lineLimit(3...6)
+                .textFieldStyle(.roundedBorder)
 
             HStack {
                 Button("Cancel") {
                     showCommitSheet = false
                     commitMessage = ""
+                    includeUntracked = false
                 }
                 .keyboardShortcut(.cancelAction)
 
@@ -750,16 +811,47 @@ struct ProjectEditorView: View {
 
                 Button("Commit") {
                     Task {
-                        _ = await gitService.commit(message: commitMessage)
+                        if let id = activeProject?.project.id {
+                            _ = await gitStatus.commit(projectID: id, message: commitMessage, includeUntracked: includeUntracked)
+                        }
                         commitMessage = ""
+                        includeUntracked = false
                         showCommitSheet = false
                     }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(commitMessage.isEmpty)
+                .disabled(commitMessage.isEmpty || commitFileCount == 0)
             }
         }
-        .padding(20)
-        .frame(width: 400)
+        .padding(24)
+        .frame(width: 480)
+    }
+
+    private func fileRow(_ file: GitStatusService.FileStatus) -> some View {
+        HStack(spacing: 8) {
+            Text(file.status)
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundStyle(fileStatusColor(file.status))
+                .frame(width: 22, alignment: .center)
+            Text(file.path)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(.primary.opacity(0.85))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer()
+        }
+        .padding(.vertical, 2)
+        .padding(.horizontal, 8)
+    }
+
+    private func fileStatusColor(_ status: String) -> Color {
+        switch status {
+        case "M": return .orange
+        case "A": return .green
+        case "D": return .red
+        case "??": return .blue
+        case "R": return .purple
+        default: return .secondary
+        }
     }
 }

@@ -5,23 +5,23 @@ struct SettingsView: View {
     @AppStorage("gridVisible") private var gridVisible = true
 
     var body: some View {
-        TabView {
-            Tab("General", systemImage: "gear") {
-                Form {
-                    Section("AI Provider") {
-                        Picker("Default Provider", selection: $defaultProvider) {
-                            Text("Claude (via Claude Code)").tag("claude")
-                        }
-                    }
-
-                    Section("Canvas") {
-                        Toggle("Show Grid", isOn: $gridVisible)
-                    }
+        Form {
+            Section {
+                Picker("Default Provider", selection: $defaultProvider) {
+                    Text("Claude (via Claude Code)").tag("claude")
+                    Text("Codex (via OpenAI)").tag("codex")
                 }
-                .formStyle(.grouped)
+            } header: {
+                Label("AI Provider", systemImage: "cpu")
+            }
+
+            Section {
+                Toggle("Show Grid", isOn: $gridVisible)
+            } header: {
+                Label("Canvas", systemImage: "square.grid.3x3")
             }
         }
-        .scenePadding()
-        .frame(width: 400, height: 200)
+        .formStyle(.grouped)
+        .frame(width: 460, height: 260)
     }
 }

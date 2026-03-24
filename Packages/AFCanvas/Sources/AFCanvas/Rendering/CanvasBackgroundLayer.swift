@@ -11,6 +11,7 @@ struct CanvasBackgroundLayer: View {
     }
 
     private func drawGrid(context: GraphicsContext, size: CGSize) {
+        guard canvasState.showGrid else { return }
         let gridSize = canvasState.gridSize * canvasState.zoom
         guard gridSize > 4 else { return }
 
