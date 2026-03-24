@@ -42,6 +42,7 @@ struct ProjectSidebarView: View {
             }
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity)
+            .padding(.horizontal, 16)
             .padding(.vertical, 14)
         }
         .alert("Rename Project", isPresented: Binding(
