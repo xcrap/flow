@@ -7,9 +7,9 @@ generate:
 dev: generate
 	xcodebuild -project Flow.xcodeproj -scheme Flow -configuration Debug -derivedDataPath build/dev -quiet
 	mkdir -p dist
-	rm -rf dist/Flow.app
-	cp -R build/dev/Build/Products/Debug/Flow.app dist/Flow.app
-	open dist/Flow.app
+	rm -rf dist/Flow-Dev.app
+	cp -R build/dev/Build/Products/Debug/Flow.app dist/Flow-Dev.app
+	open dist/Flow-Dev.app
 
 # Release build
 build: generate
