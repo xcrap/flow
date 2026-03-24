@@ -6,6 +6,7 @@ import AFCanvas
 struct ProjectSidebarView: View {
     @Environment(AppState.self) private var appState
     @Environment(ProviderRegistry.self) private var providerRegistry
+    @Environment(GitStatusService.self) private var gitStatus
     let activeProject: ProjectState?
     let conversations: [UUID: ConversationState]
     let onSelectAgent: (UUID) -> Void
@@ -36,23 +37,12 @@ struct ProjectSidebarView: View {
                 addProject()
             } label: {
                 Label("New Project", systemImage: "plus")
-                    .font(.system(size: 13, weight: .semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.white.opacity(0.06))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.white.opacity(0.07), lineWidth: 1)
-                            }
-                    )
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.5))
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Color.black.opacity(0.38))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
         }
         .alert("Rename Project", isPresented: Binding(
             get: { renamingProjectID != nil },
@@ -74,28 +64,7 @@ struct ProjectSidebarView: View {
     }
 
     private var sidebarBackground: some View {
-        ZStack {
-            Color(red: 0.08, green: 0.08, blue: 0.09)
-
-            LinearGradient(
-                colors: [
-                    Color(red: 0.16, green: 0.15, blue: 0.14).opacity(0.34),
-                    Color(red: 0.10, green: 0.10, blue: 0.10).opacity(0.12),
-                    Color.clear
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(0.05),
-                    Color.clear
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
+        Color(red: 0.09, green: 0.09, blue: 0.10)
     }
 
     private var projectSection: some View {
@@ -163,6 +132,7 @@ struct ProjectSidebarView: View {
     private func projectRow(_ project: ProjectState) -> some View {
         let isSelected = appState.activeProjectID == project.project.id
         let agentCount = project.nodes.values.filter { $0.kind == .agent }.count
+        let git = gitStatus.info[project.project.id]
 
         return Button {
             appState.activeProjectID = project.project.id
@@ -188,15 +158,49 @@ struct ProjectSidebarView: View {
                             .foregroundStyle(.white.opacity(0.56))
                     }
 
-                    Text(shortenPath(project.project.rootPath))
-                        .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.52))
-                        .lineLimit(1)
+                    HStack(spacing: 8) {
+                        Text(shortenPath(project.project.rootPath))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.52))
+                            .lineLimit(1)
+
+                        Spacer()
+
+                        if let git, !git.branch.isEmpty {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.triangle.branch")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.44))
+
+                                Text(git.branch)
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.6))
+                                    .lineLimit(1)
+
+                                if git.hasChanges {
+                                    HStack(spacing: 3) {
+                                        if git.additions > 0 {
+                                            Text("+\(git.additions)")
+                                                .foregroundStyle(Color(red: 0.30, green: 0.78, blue: 0.42))
+                                        }
+                                        if git.deletions > 0 {
+                                            Text("-\(git.deletions)")
+                                                .foregroundStyle(Color(red: 0.95, green: 0.35, blue: 0.35))
+                                        }
+                                    }
+                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                }
+                            }
+                        }
+                    }
                 }
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(cardBackground(isSelected: isSelected))
+            .onAppear {
+                gitStatus.startPolling(projectID: project.project.id, rootPath: project.project.rootPath)
+            }
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -317,16 +321,15 @@ struct ProjectSidebarView: View {
     }
 
     private func cardBackground(isSelected: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(isSelected ? Color.white.opacity(0.09) : Color.white.opacity(0.035))
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(isSelected ? Color.white.opacity(0.08) : Color.white.opacity(0.03))
             .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(
-                        isSelected ? Color.white.opacity(0.15) : Color.white.opacity(0.05),
-                        lineWidth: isSelected ? 1.5 : 1
+                        isSelected ? Color.white.opacity(0.12) : Color.white.opacity(0.05),
+                        lineWidth: 0.5
                     )
             }
-            .shadow(color: .black.opacity(isSelected ? 0.2 : 0.08), radius: isSelected ? 18 : 8, y: 10)
     }
 
     private func sectionLabel(_ text: String) -> some View {

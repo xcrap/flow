@@ -90,14 +90,14 @@ struct AgentNodePanel: View {
         .frame(width: node.position.width, height: node.position.height)
         .background {
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color.black.opacity(0.22))
-                .shadow(color: .black.opacity(isSelected ? 0.3 : 0.15), radius: isSelected ? 14 : 8, y: 4)
+                .fill(Color(red: 0.11, green: 0.11, blue: 0.12))
+                .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
         }
         .overlay {
             RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(
-                    isSelected ? Color.purple : Color(nsColor: .separatorColor).opacity(0.5),
-                    lineWidth: isSelected ? 2 : 0.5
+                    isSelected ? Color.purple.opacity(0.7) : Color.white.opacity(0.08),
+                    lineWidth: isSelected ? 1.5 : 0.5
                 )
         }
         .clipShape(RoundedRectangle(cornerRadius: 14))
@@ -205,41 +205,27 @@ struct AgentNodePanel: View {
 
     // MARK: - Title Bar
 
+    private var headerBackground: Color {
+        if isTitleHovered { return Color.white.opacity(0.06) }
+        guard isWorking else { return Color(red: 0.13, green: 0.13, blue: 0.14) }
+        return statusColor.opacity(0.12)
+    }
+
     private var titleBar: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(statusColor.opacity(isWorking ? 0.22 : 0.12))
-                        .frame(width: 18, height: 18)
-
-                    Circle()
-                        .fill(statusColor)
-                        .frame(width: 9, height: 9)
-                }
-
-                Text(statusLabel)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(isWorking ? statusColor : .secondary)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(Color.white.opacity(0.04))
-                    .overlay {
-                        Capsule(style: .continuous)
-                            .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                    }
-            )
-
             Image(systemName: "brain")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.purple)
+                .foregroundStyle(isWorking ? statusColor : .purple)
 
             Text(node.title)
                 .font(.system(size: 14, weight: .medium))
                 .lineLimit(1)
+
+            if isWorking {
+                Text(statusLabel)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(statusColor)
+            }
 
             Spacer()
 
@@ -259,74 +245,6 @@ struct AgentNodePanel: View {
                     )
             }
 
-            Menu {
-                ForEach(providerOptions, id: \.id) { provider in
-                    Button {
-                        selectProvider(provider.id)
-                    } label: {
-                        if selectedProvider == provider.id {
-                            Label(provider.name, systemImage: "checkmark")
-                        } else {
-                            Text(provider.name)
-                        }
-                    }
-                }
-            } label: {
-                Text(selectedProviderName)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(selectedProvider == "codex" ? .green : .purple)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 4))
-            }
-            .menuStyle(.borderlessButton)
-
-            Menu {
-                ForEach(availableModels) { model in
-                    Button {
-                        selectedModel = model.id
-                        onModelChange(model.id)
-                    } label: {
-                        if model.id == selectedModel {
-                            Label(model.name, systemImage: "checkmark")
-                        } else {
-                            Text(model.name)
-                        }
-                    }
-                }
-            } label: {
-                Text(selectedModelName)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
-            }
-            .menuStyle(.borderlessButton)
-
-            Menu {
-                ForEach(efforts, id: \.0) { id, name in
-                    Button {
-                        selectedEffort = id
-                        onEffortChange(id)
-                    } label: {
-                        if id == selectedEffort {
-                            Label(name, systemImage: "checkmark")
-                        } else {
-                            Text(name)
-                        }
-                    }
-                }
-            } label: {
-                Text(efforts.first(where: { $0.0 == selectedEffort })?.1 ?? selectedEffort)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
-            }
-            .menuStyle(.borderlessButton)
-
             Button {
                 showSettings.toggle()
             } label: {
@@ -340,21 +258,6 @@ struct AgentNodePanel: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Agent Settings")
                         .font(.system(size: 14, weight: .semibold))
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Provider")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        Picker("", selection: $selectedProvider) {
-                            ForEach(providerOptions, id: \.id) { provider in
-                                Text(provider.name).tag(provider.id)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .onChange(of: selectedProvider) { _, val in
-                            selectProvider(val)
-                        }
-                    }
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Permission Mode")
@@ -408,7 +311,7 @@ struct AgentNodePanel: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(isTitleHovered ? Color.white.opacity(0.06) : Color.black.opacity(0.25))
+        .background(headerBackground)
     }
 
     // MARK: - Messages
@@ -724,42 +627,131 @@ struct AgentNodePanel: View {
     // MARK: - Input Bar
 
     private var inputBar: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            TextField(conversation.isStreaming ? "Add to queue..." : "Message...", text: $inputText, axis: .vertical)
+        VStack(spacing: 0) {
+            TextField(conversation.isStreaming ? "Add to queue..." : "Ask for follow-up changes or attach images", text: $inputText, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
-                .lineSpacing(2)
-                .lineLimit(1...6)
+                .lineSpacing(3)
+                .lineLimit(2...8)
                 .focused($inputFocused)
                 .onSubmit {
                     send()
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .padding(.bottom, 10)
 
-            if conversation.isStreaming {
-                Button {
-                    onCancel()
+            HStack(spacing: 6) {
+                Menu {
+                    ForEach(providerOptions, id: \.id) { provider in
+                        Button {
+                            selectProvider(provider.id)
+                        } label: {
+                            if selectedProvider == provider.id {
+                                Label(provider.name, systemImage: "checkmark")
+                            } else {
+                                Text(provider.name)
+                            }
+                        }
+                    }
                 } label: {
-                    Image(systemName: "stop.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(.red)
+                    HStack(spacing: 4) {
+                        Image(systemName: selectedProvider == "codex" ? "circle.hexagongrid" : "brain")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(selectedProviderName)
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundStyle(selectedProvider == "codex" ? .green : .purple)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                }
+                .menuStyle(.borderlessButton)
+
+                Menu {
+                    ForEach(availableModels) { model in
+                        Button {
+                            selectedModel = model.id
+                            onModelChange(model.id)
+                        } label: {
+                            if model.id == selectedModel {
+                                Label(model.name, systemImage: "checkmark")
+                            } else {
+                                Text(model.name)
+                            }
+                        }
+                    }
+                } label: {
+                    Text(selectedModelName)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                }
+                .menuStyle(.borderlessButton)
+
+                Menu {
+                    ForEach(efforts, id: \.0) { id, name in
+                        Button {
+                            selectedEffort = id
+                            onEffortChange(id)
+                        } label: {
+                            if id == selectedEffort {
+                                Label(name, systemImage: "checkmark")
+                            } else {
+                                Text(name)
+                            }
+                        }
+                    }
+                } label: {
+                    Text(efforts.first(where: { $0.0 == selectedEffort })?.1 ?? selectedEffort)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                }
+                .menuStyle(.borderlessButton)
+
+                Spacer()
+
+                if conversation.isStreaming {
+                    Button {
+                        onCancel()
+                    } label: {
+                        Image(systemName: "stop.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Stop")
+                }
+
+                Button {
+                    send()
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(canSend ? Color.accentColor : .white.opacity(0.15))
                 }
                 .buttonStyle(.plain)
-                .help("Stop")
+                .disabled(!canSend)
+                .help(conversation.isStreaming ? "Queue prompt" : "Send")
             }
-
-            Button {
-                send()
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundColor(canSend ? Color.accentColor : .secondary)
-            }
-            .buttonStyle(.plain)
-            .disabled(!canSend)
-            .help(conversation.isStreaming ? "Queue prompt" : "Send")
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                }
+        )
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
     }
 
     private var canSend: Bool {

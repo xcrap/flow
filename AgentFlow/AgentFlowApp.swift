@@ -7,6 +7,7 @@ import AFCanvas
 struct AgentFlowApp: App {
     @State private var appState: AppState
     @State private var providerRegistry = ProviderRegistry()
+    @State private var gitStatus = GitStatusService()
     @State private var sidebarVisible = true
     @State private var showCommandPalette = false
 
@@ -24,6 +25,7 @@ struct AgentFlowApp: App {
             )
             .environment(appState)
             .environment(providerRegistry)
+            .environment(gitStatus)
         }
         .defaultSize(width: 1400, height: 900)
         .windowToolbarStyle(.unified(showsTitle: true))

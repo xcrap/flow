@@ -25,14 +25,14 @@ struct TerminalNodePanel: View {
         .frame(width: node.position.width, height: node.position.height)
         .background {
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color.black.opacity(0.22))
-                .shadow(color: .black.opacity(isSelected ? 0.3 : 0.15), radius: isSelected ? 14 : 8, y: 4)
+                .fill(Color(red: 0.11, green: 0.11, blue: 0.12))
+                .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
         }
         .overlay {
             RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(
-                    isSelected ? Color.blue : Color(nsColor: .separatorColor).opacity(0.5),
-                    lineWidth: isSelected ? 2 : 0.5
+                    isSelected ? Color.blue.opacity(0.7) : Color.white.opacity(0.08),
+                    lineWidth: isSelected ? 1.5 : 0.5
                 )
         }
         .clipShape(RoundedRectangle(cornerRadius: 14))
@@ -48,17 +48,19 @@ struct TerminalNodePanel: View {
 
     private var titleBar: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(session.isRunning ? Color.green : .gray.opacity(0.4))
-                .frame(width: 9, height: 9)
-
             Image(systemName: "terminal")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.blue)
+                .foregroundStyle(session.isRunning ? .green : .blue)
 
             Text(node.title)
                 .font(.system(size: 14, weight: .medium))
                 .lineLimit(1)
+
+            if session.isRunning {
+                Text("Running")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.green)
+            }
 
             Spacer()
 
@@ -98,7 +100,7 @@ struct TerminalNodePanel: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(isTitleHovered ? Color.blue.opacity(0.18) : Color.black.opacity(0.25))
+        .background(session.isRunning ? Color.green.opacity(0.12) : (isTitleHovered ? Color.white.opacity(0.06) : Color(red: 0.13, green: 0.13, blue: 0.14)))
     }
 
     // MARK: - Output
@@ -149,34 +151,55 @@ struct TerminalNodePanel: View {
     // MARK: - Command Input
 
     private var commandInput: some View {
-        HStack(spacing: 8) {
-            Text("$")
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundStyle(.green)
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text("$")
+                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.green)
 
-            TextField("command", text: $inputText)
-                .textFieldStyle(.plain)
-                .font(.system(size: 14, design: .monospaced))
-                .focused($inputFocused)
-                .onSubmit {
-                    runCommand()
-                }
-                .disabled(session.isRunning)
-                .onChange(of: session.isRunning) {
-                    if !session.isRunning {
-                        inputFocused = true
-                        onSave()
+                TextField("Enter command...", text: $inputText, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14, design: .monospaced))
+                    .lineLimit(1...4)
+                    .focused($inputFocused)
+                    .onSubmit {
+                        runCommand()
                     }
-                }
-
-            if session.isRunning {
-                ProgressView()
-                    .controlSize(.small)
+                    .disabled(session.isRunning)
+                    .onChange(of: session.isRunning) {
+                        if !session.isRunning {
+                            inputFocused = true
+                            onSave()
+                        }
+                    }
             }
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+            .padding(.bottom, 10)
+
+            HStack {
+                if session.isRunning {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Running...")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.44))
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 10)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                }
+        )
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
     }
 
     private func runCommand() {

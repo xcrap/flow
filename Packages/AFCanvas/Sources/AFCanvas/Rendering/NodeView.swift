@@ -27,14 +27,14 @@ struct NodeView: View {
         .frame(width: node.position.width, height: node.position.height)
         .background {
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(nsColor: .windowBackgroundColor))
-                .shadow(color: .black.opacity(isSelected ? 0.15 : 0.08), radius: isSelected ? 8 : 4, y: 2)
+                .fill(Color(red: 0.11, green: 0.11, blue: 0.12))
+                .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
         }
         .overlay {
             RoundedRectangle(cornerRadius: 12)
                 .strokeBorder(
-                    isSelected ? accentColor : Color(nsColor: .separatorColor),
-                    lineWidth: isSelected ? 2 : 0.5
+                    isSelected ? accentColor.opacity(0.7) : Color.white.opacity(0.08),
+                    lineWidth: isSelected ? 1.5 : 0.5
                 )
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -58,19 +58,10 @@ struct NodeView: View {
                 .lineLimit(1)
 
             Spacer()
-
-            if node.kind == .agent {
-                Text(node.configuration.modelID ?? "sonnet")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 4))
-            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        .background(Color(red: 0.13, green: 0.13, blue: 0.14))
     }
 
     private var statusColor: Color {
@@ -110,28 +101,34 @@ struct NodeView: View {
 
             Spacer()
 
-            // Fake input bar
-            HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-                    .frame(height: 32)
-                    .overlay(alignment: .leading) {
-                        Text("Message...")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.quaternary)
-                            .padding(.leading, 10)
-                    }
-
-                Circle()
-                    .fill(Color(nsColor: .controlBackgroundColor))
-                    .frame(width: 28, height: 28)
-                    .overlay {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.quaternary)
-                    }
+            // Fake input bar matching the bordered box style
+            VStack(spacing: 6) {
+                HStack(spacing: 8) {
+                    Text("Message...")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.quaternary)
+                    Spacer()
+                    Circle()
+                        .fill(Color.white.opacity(0.06))
+                        .frame(width: 24, height: 24)
+                        .overlay {
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.quaternary)
+                        }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
             }
-            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white.opacity(0.03))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                    }
+            )
+            .padding(10)
         }
     }
 
@@ -153,24 +150,29 @@ struct NodeView: View {
 
             Divider()
 
-            HStack(spacing: 8) {
-                Text("$")
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.green.opacity(0.6))
-
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-                    .frame(height: 26)
-                    .overlay(alignment: .leading) {
-                        Text("Enter command...")
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.quaternary)
-                            .padding(.leading, 8)
-                    }
+            VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    Text("$")
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.green.opacity(0.6))
+                    Text("Enter command...")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.quaternary)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.black.opacity(0.02))
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white.opacity(0.03))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                    }
+            )
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
         }
     }
 }
