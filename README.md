@@ -29,9 +29,8 @@ A native macOS app for orchestrating AI agents and terminals on an infinite canv
 ## Build & Run
 
 ```bash
-make dev       # Build debug + open app
-make install   # Build release + install to /Applications
-make build     # Build release to dist/Flow.app
+make dev       # Build debug + open (dist/Flow-Dev.app)
+make build     # Build release (dist/Flow.app)
 make run       # Build release + open
 make test      # Run all package tests
 make clean     # Remove build artifacts

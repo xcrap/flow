@@ -1,4 +1,4 @@
-.PHONY: dev build install run test clean generate
+.PHONY: dev build run test clean generate
 
 generate:
 	xcodegen generate
@@ -17,12 +17,6 @@ build: generate
 	mkdir -p dist
 	rm -rf dist/Flow.app
 	cp -R build/Flow.xcarchive/Products/Applications/Flow.app dist/Flow.app
-
-# Install release build to /Applications
-install: build
-	rm -rf /Applications/Flow.app
-	cp -R dist/Flow.app /Applications/Flow.app
-	@echo "Installed to /Applications/Flow.app"
 
 # Build release and open
 run: build
