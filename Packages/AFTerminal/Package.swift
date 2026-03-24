@@ -7,8 +7,16 @@ let package = Package(
     products: [
         .library(name: "AFTerminal", targets: ["AFTerminal"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.12.0"),
+    ],
     targets: [
-        .target(name: "AFTerminal"),
+        .target(
+            name: "AFTerminal",
+            dependencies: [
+                .product(name: "SwiftTerm", package: "SwiftTerm"),
+            ]
+        ),
         .testTarget(name: "AFTerminalTests", dependencies: ["AFTerminal"]),
     ]
 )

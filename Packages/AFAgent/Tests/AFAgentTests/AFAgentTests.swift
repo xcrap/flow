@@ -809,57 +809,6 @@ final class ConversationServiceTests: XCTestCase {
     }
 }
 
-// MARK: - TerminalLine Tests
-
-final class TerminalLineTests: XCTestCase {
-
-    func testTerminalLinePrompt() throws {
-        let line = TerminalLine(text: "$ ", type: .prompt)
-        XCTAssertEqual(line.text, "$ ")
-        if case .prompt = line.type {} else {
-            XCTFail("Expected .prompt type")
-        }
-    }
-
-    func testTerminalLineCommand() throws {
-        let line = TerminalLine(text: "$ ls -la", type: .command)
-        XCTAssertEqual(line.text, "$ ls -la")
-        if case .command = line.type {} else {
-            XCTFail("Expected .command type")
-        }
-    }
-
-    func testTerminalLineOutput() throws {
-        let line = TerminalLine(text: "file.txt", type: .output)
-        XCTAssertEqual(line.text, "file.txt")
-        if case .output = line.type {} else {
-            XCTFail("Expected .output type")
-        }
-    }
-
-    func testTerminalLineError() throws {
-        let line = TerminalLine(text: "exit 1", type: .error)
-        XCTAssertEqual(line.text, "exit 1")
-        if case .error = line.type {} else {
-            XCTFail("Expected .error type")
-        }
-    }
-
-    func testTerminalLineHasUniqueID() throws {
-        let line1 = TerminalLine(text: "a", type: .output)
-        let line2 = TerminalLine(text: "a", type: .output)
-        XCTAssertNotEqual(line1.id, line2.id)
-    }
-
-    func testTerminalLineHasTimestamp() throws {
-        let before = Date()
-        let line = TerminalLine(text: "test", type: .output)
-        let after = Date()
-        XCTAssertGreaterThanOrEqual(line.timestamp, before)
-        XCTAssertLessThanOrEqual(line.timestamp, after)
-    }
-}
-
 // MARK: - AIModel Tests
 
 final class AIModelTests: XCTestCase {

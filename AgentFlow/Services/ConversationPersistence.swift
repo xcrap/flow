@@ -1,6 +1,7 @@
 import Foundation
 import AFCore
 import AFAgent
+import AFTerminal
 
 // MARK: - Conversation Persistence
 
@@ -62,12 +63,39 @@ struct PersistedConversation: Codable {
 
 struct PersistedTerminal: Codable {
     var nodeID: UUID
-    var lines: [PersistedTerminalLine]
-}
+    var transcript: String?
 
-struct PersistedTerminalLine: Codable {
-    var text: String
-    var type: String // "prompt", "command", "output", "error"
+    private enum CodingKeys: String, CodingKey {
+        case nodeID
+        case transcript
+        case currentDirectory
+        case lines
+    }
+
+    init(nodeID: UUID, transcript: String?) {
+        self.nodeID = nodeID
+        self.transcript = transcript
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(nodeID, forKey: .nodeID)
+        try container.encodeIfPresent(transcript, forKey: .transcript)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        nodeID = try container.decode(UUID.self, forKey: .nodeID)
+        transcript = try container.decodeIfPresent(String.self, forKey: .transcript)
+        _ = try container.decodeIfPresent(String.self, forKey: .currentDirectory)
+        if transcript == nil,
+           let lines = try container.decodeIfPresent([PersistedTerminalLine].self, forKey: .lines) {
+            transcript = lines
+                .map(\.text)
+                .joined(separator: "\n")
+                .nilIfEmpty
+        }
+    }
 }
 
 struct PersistedProjectData: Codable {
@@ -89,6 +117,7 @@ enum ConversationPersistence {
     }
 
     static func save(conversations: [UUID: ConversationState], terminals: [UUID: TerminalSession], for projectID: UUID) {
+        _ = terminals
         let persisted = PersistedProjectData(
             conversations: conversations.map { (nodeID, state) in
                 PersistedConversation(
@@ -105,20 +134,7 @@ enum ConversationPersistence {
                     reportedContextWindow: state.reportedContextWindow
                 )
             },
-            terminals: terminals.map { (nodeID, session) in
-                PersistedTerminal(
-                    nodeID: nodeID,
-                    lines: session.outputLines.suffix(500).map { line in
-                        let typeStr: String = switch line.type {
-                        case .prompt: "prompt"
-                        case .command: "command"
-                        case .output: "output"
-                        case .error: "error"
-                        }
-                        return PersistedTerminalLine(text: line.text, type: typeStr)
-                    }
-                )
-            }
+            terminals: nil
         )
 
         do {
@@ -151,25 +167,9 @@ enum ConversationPersistence {
     }
 
     static func loadTerminals(for projectID: UUID, rootPath: String) -> [UUID: TerminalSession] {
-        guard let data = loadData(for: projectID),
-              let terminals = data.terminals
-        else { return [:] }
-
-        var result: [UUID: TerminalSession] = [:]
-        for term in terminals {
-            let session = TerminalSession(id: term.nodeID, currentDirectory: rootPath)
-            session.outputLines = term.lines.map { line in
-                let type: TerminalLine.LineType = switch line.type {
-                case "command": .command
-                case "output": .output
-                case "error": .error
-                default: .prompt
-                }
-                return TerminalLine(text: line.text, type: type)
-            }
-            result[term.nodeID] = session
-        }
-        return result
+        _ = projectID
+        _ = rootPath
+        return [:]
     }
 
     private static func loadData(for projectID: UUID) -> PersistedProjectData? {
@@ -199,4 +199,15 @@ enum ConversationPersistence {
 // Keep old struct for backward compat
 private struct PersistedConversations: Codable {
     var conversations: [PersistedConversation]
+}
+
+private struct PersistedTerminalLine: Codable {
+    var text: String
+    var type: String
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
+    }
 }

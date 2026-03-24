@@ -24,6 +24,18 @@ struct AgentFlowCommands: Commands {
         }
 
         CommandGroup(after: .newItem) {
+            Button("New AI Agent") {
+                addNode(kind: .agent, title: "AI Agent")
+            }
+            .keyboardShortcut("i", modifiers: .command)
+            .disabled(appState.activeProject == nil)
+
+            Button("New Terminal") {
+                addNode(kind: .terminal, title: "Terminal")
+            }
+            .keyboardShortcut("t", modifiers: .command)
+            .disabled(appState.activeProject == nil)
+
             Button("Command Palette") {
                 showCommandPalette.toggle()
             }
@@ -101,5 +113,41 @@ struct AgentFlowCommands: Commands {
         }
 
         project.selectedNodeIDs = newIDs
+    }
+
+    private func addNode(kind: NodeKind, title: String) {
+        guard let project = appState.activeProject else { return }
+        let position = nextNodePosition(in: project, kind: kind)
+        let node = project.addNode(kind: kind, title: title, at: position)
+        project.selectedNodeIDs = [node.id]
+        project.selectedConnectionIDs.removeAll()
+        project.bringToFront(node.id)
+    }
+
+    private func nextNodePosition(in project: ProjectState, kind: NodeKind) -> CGPoint {
+        let size = WorkflowNode.defaultSize(for: kind)
+        let padding: Double = 40
+
+        if project.nodes.isEmpty {
+            return project.canvasState.screenToCanvas(
+                CGPoint(x: 300 + size.width / 2, y: 80 + size.height / 2)
+            )
+        }
+
+        var maxRight: Double = -Double.infinity
+        var yAtMaxRight: Double = 0
+
+        for node in project.nodes.values {
+            let right = node.position.x + node.position.width / 2
+            if right > maxRight {
+                maxRight = right
+                yAtMaxRight = node.position.y
+            }
+        }
+
+        return CGPoint(
+            x: maxRight + padding + size.width / 2,
+            y: yAtMaxRight
+        )
     }
 }

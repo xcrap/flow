@@ -2,6 +2,7 @@ import SwiftUI
 import AFCore
 import AFAgent
 import AFCanvas
+import AFTerminal
 
 struct ProjectEditorView: View {
     @Environment(AppState.self) private var appState
@@ -45,7 +46,13 @@ struct ProjectEditorView: View {
         } detail: {
             ZStack {
                 if let project = activeProject {
-                    canvasArea(project: project)
+                    if loadedPersistenceProjectIDs.contains(project.project.id) {
+                        canvasArea(project: project)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 } else {
                     WelcomeView()
                 }
@@ -67,11 +74,10 @@ struct ProjectEditorView: View {
         }
         .onAppear {
             setupProviders()
+        }
+        .task(id: appState.activeProjectID) {
             if let project = activeProject {
-                appState.sidebarSelection = .project(project.project.id)
-                loadConversations(for: project)
-                ensureSessionsExist(for: project)
-                gitService.configure(rootPath: project.project.rootPath)
+                prepareProjectForDisplay(project)
             }
         }
         .onChange(of: appState.activeProjectID) { previousProjectID, _ in
@@ -79,12 +85,6 @@ struct ProjectEditorView: View {
                 saveConversations(for: previousProjectID)
             }
             appState.scheduleSave()
-
-            if let project = activeProject {
-                loadConversations(for: project)
-                ensureSessionsExist(for: project)
-                gitService.configure(rootPath: project.project.rootPath)
-            }
         }
         .onChange(of: activeProject?.nodes.count) {
             Task { @MainActor in
@@ -387,8 +387,8 @@ struct ProjectEditorView: View {
                 isSelected: isSelected,
                 isTitleHovered: isTitleHovered,
                 session: session,
-                onSave: { [self] in saveConversations(for: projectID) },
                 onDelete: {
+                    session.shutdown()
                     project.removeNode(node.id)
                     terminalSessionsByProject[projectID]?.removeValue(forKey: node.id)
                     saveConversations(for: projectID)
@@ -405,8 +405,13 @@ struct ProjectEditorView: View {
     }
 
     private func terminalSessionFor(_ nodeID: UUID, in projectID: UUID, rootPath: String) -> TerminalSession {
-        if let existing = terminalSessionsByProject[projectID]?[nodeID] { return existing }
+        if let existing = terminalSessionsByProject[projectID]?[nodeID] {
+            existing.setLaunchDirectory(rootPath)
+            wireTerminalSession(existing, projectID: projectID)
+            return existing
+        }
         let session = TerminalSession(id: nodeID, currentDirectory: rootPath)
+        wireTerminalSession(session, projectID: projectID)
         terminalSessionsByProject[projectID, default: [:]][nodeID] = session
         return session
     }
@@ -422,7 +427,9 @@ struct ProjectEditorView: View {
                 }
             case .terminal:
                 if terminalSessionsByProject[projectID]?[id] == nil {
-                    terminalSessionsByProject[projectID, default: [:]][id] = TerminalSession(id: id, currentDirectory: cwd)
+                    let session = TerminalSession(id: id, currentDirectory: cwd)
+                    wireTerminalSession(session, projectID: projectID)
+                    terminalSessionsByProject[projectID, default: [:]][id] = session
                 }
             }
         }
@@ -470,6 +477,13 @@ struct ProjectEditorView: View {
 
     // MARK: - Conversation Persistence
 
+    private func prepareProjectForDisplay(_ project: ProjectState) {
+        appState.sidebarSelection = .project(project.project.id)
+        loadConversations(for: project)
+        ensureSessionsExist(for: project)
+        gitService.configure(rootPath: project.project.rootPath)
+    }
+
     private func loadConversations(for project: ProjectState) {
         let projectID = project.project.id
         guard !loadedPersistenceProjectIDs.contains(projectID) else { return }
@@ -490,8 +504,11 @@ struct ProjectEditorView: View {
             rootPath: project.project.rootPath
         ) {
             if let existingSession = terminalSessions[nodeID] {
-                hydrate(existingSession, with: persistedSession)
+                hydrate(existingSession, with: persistedSession, rootPath: project.project.rootPath)
+                wireTerminalSession(existingSession, projectID: projectID)
             } else {
+                persistedSession.setLaunchDirectory(project.project.rootPath)
+                wireTerminalSession(persistedSession, projectID: projectID)
                 terminalSessions[nodeID] = persistedSession
             }
         }
@@ -561,6 +578,12 @@ struct ProjectEditorView: View {
             }
         }
 
+        if let terminalSessions = terminalSessionsByProject[projectID]?.values {
+            for session in terminalSessions {
+                session.shutdown()
+            }
+        }
+
         conversationsByProject.removeValue(forKey: projectID)
         terminalSessionsByProject.removeValue(forKey: projectID)
         loadedPersistenceProjectIDs.remove(projectID)
@@ -591,10 +614,21 @@ struct ProjectEditorView: View {
         target.clearQueuedPrompts()
     }
 
-    private func hydrate(_ target: TerminalSession, with persisted: TerminalSession) {
-        target.outputLines = persisted.outputLines
-        target.isRunning = false
-        target.currentDirectory = persisted.currentDirectory
+    private func hydrate(_ target: TerminalSession, with persisted: TerminalSession, rootPath: String) {
+        target.setLaunchDirectory(rootPath)
+        target.setPersistedTranscript(persisted.snapshotTranscript())
+        if !target.isRunning {
+            target.currentDirectory = persisted.currentDirectory
+        }
+    }
+
+    private func wireTerminalSession(_ session: TerminalSession, projectID: UUID) {
+        session.onChange = { [projectID] in
+            Task { @MainActor in
+                guard self.loadedPersistenceProjectIDs.contains(projectID) else { return }
+                self.saveConversations(for: projectID)
+            }
+        }
     }
 
     // MARK: - Node Positioning
