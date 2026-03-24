@@ -13,15 +13,17 @@ Native macOS app for orchestrating AI agents and terminals on an infinite canvas
 - **Main app target** in `Flow/` — Views, commands, services
 - **XcodeGen** — `project.yml` generates `Flow.xcodeproj`
 
-## Key Files
+## Build
 
-- `Flow/FlowApp.swift` — App entry point, single Window scene
-- `Flow/Views/ProjectEditorView.swift` — Main editor with canvas, sidebar, providers
-- `Flow/Views/AgentNodePanel.swift` — AI agent chat panel (Claude/Codex)
-- `Flow/Views/TerminalNodePanel.swift` — Terminal panel with shell sessions
-- `Packages/AFAgent/Sources/AFAgent/Providers/ClaudeCodeProvider.swift` — Claude Code CLI integration
-- `Packages/AFAgent/Sources/AFAgent/Providers/CodexProvider.swift` — Codex app-server JSON-RPC
-- `Packages/AFCanvas/Sources/AFCanvas/ProjectPersistence.swift` — Save/load projects
+```bash
+make dev       # Debug build + open (com.flow.app.dev)
+make install   # Release build + install to /Applications (com.flow.app)
+make build     # Release build to dist/Flow.app
+make test      # Run all package tests
+make clean     # Remove build artifacts
+```
+
+Debug and Release use different bundle IDs and data directories so they don't interfere with each other.
 
 ## Providers
 
@@ -39,44 +41,10 @@ Native macOS app for orchestrating AI agents and terminals on an infinite canvas
 
 ## Persistence
 
-- Projects: `~/Library/Application Support/Flow/projects.json`
-- Conversations: `~/Library/Application Support/Flow/conversations/<projectID>.json`
-- Backup: `projects.backup.json` created before each save
-
-## Build
-
-```bash
-# Generate Xcode project
-xcodegen generate
-
-# Build from CLI
-xcodebuild -project Flow.xcodeproj -scheme Flow -configuration Release build
-
-# Build app bundle
-xcodebuild -project Flow.xcodeproj -scheme Flow -configuration Release -derivedDataPath build archive -archivePath build/Flow.xcarchive
-
-# Run tests
-cd Packages/AFCore && swift test
-cd Packages/AFCanvas && swift test
-cd Packages/AFAgent && swift test
-```
-
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| Cmd+N | New project (folder picker) |
-| Cmd+K | Command palette |
-| Cmd+B | Toggle sidebar |
-| Cmd+W | Close selected node |
-| Cmd+C | Fit to screen |
-| Cmd+D | Duplicate selected node |
-| Cmd+Plus/Minus | Zoom in/out |
-| Cmd+0 | Reset zoom |
-| Delete | Delete selected node |
-| Drag empty canvas | Pan canvas |
-| Cmd+Drag | Pan canvas (anywhere) |
-| Shift+Drag | Snap to grid |
+- Debug data: `~/Library/Application Support/Flow-Dev/`
+- Release data: `~/Library/Application Support/Flow/`
+- Projects: `projects.json`
+- Conversations: `conversations/<projectID>.json`
 
 ## Conventions
 

@@ -28,58 +28,23 @@ A native macOS app for orchestrating AI agents and terminals on an infinite canv
 
 ## Build & Run
 
+```bash
+make dev       # Build debug + open app
+make install   # Build release + install to /Applications
+make build     # Build release to dist/Flow.app
+make run       # Build release + open
+make test      # Run all package tests
+make clean     # Remove build artifacts
+```
+
+Debug builds use a separate bundle ID (`com.flow.app.dev`) and data directory, so developing won't interfere with your installed release version.
+
 ### From Xcode
 
 ```bash
 xcodegen generate
 open Flow.xcodeproj
 # Cmd+R to build and run
-```
-
-### From Command Line
-
-```bash
-# Generate project
-xcodegen generate
-
-# Build release
-xcodebuild -project Flow.xcodeproj \
-  -scheme Flow \
-  -configuration Release \
-  -derivedDataPath build \
-  build
-
-# The app bundle is at:
-# build/Build/Products/Release/Flow.app
-
-# Run it
-open build/Build/Products/Release/Flow.app
-```
-
-### Bundle for Distribution
-
-```bash
-# Archive
-xcodebuild -project Flow.xcodeproj \
-  -scheme Flow \
-  -configuration Release \
-  -derivedDataPath build \
-  archive \
-  -archivePath build/Flow.xcarchive
-
-# Export app from archive
-xcodebuild -exportArchive \
-  -archivePath build/Flow.xcarchive \
-  -exportPath build/export \
-  -exportOptionsPlist ExportOptions.plist
-```
-
-### Run Tests
-
-```bash
-cd Packages/AFCore && swift test
-cd Packages/AFCanvas && swift test
-cd Packages/AFAgent && swift test
 ```
 
 ## Quick Start
@@ -89,25 +54,6 @@ cd Packages/AFAgent && swift test
 3. Click **+** in toolbar to add an AI Agent or Terminal
 4. Chat with Claude or run commands
 5. Drag nodes by their title bar, resize from edges
-
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| `Cmd+N` | New project |
-| `Cmd+K` | Command palette |
-| `Cmd+B` | Toggle sidebar |
-| `Cmd+W` | Close selected node |
-| `Cmd+C` | Fit to screen |
-| `Cmd+D` | Duplicate node |
-| `Cmd+Plus` | Zoom in |
-| `Cmd+Minus` | Zoom out |
-| `Cmd+0` | Reset zoom |
-| `Delete` | Delete selected |
-| `Drag empty canvas` | Pan canvas |
-| `Cmd+Drag` | Pan from anywhere |
-| `Shift+Drag` | Snap to grid |
-| Right-click | Rename / Duplicate / Delete node |
 
 ## Tech Stack
 
