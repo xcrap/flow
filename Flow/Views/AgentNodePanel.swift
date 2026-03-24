@@ -246,58 +246,6 @@ struct AgentNodePanel: View {
             }
 
             Button {
-                showSettings.toggle()
-            } label: {
-                Image(systemName: "gear")
-                    .font(.system(size: 12))
-                    .foregroundColor(systemPromptText.isEmpty ? .secondary : .purple)
-            }
-            .buttonStyle(.plain)
-            .help("Agent settings")
-            .popover(isPresented: $showSettings) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Agent Settings")
-                        .font(.system(size: 14, weight: .semibold))
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Permission Mode")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        Picker("", selection: $permissionMode) {
-                            Text("Default").tag("default")
-                            Text("Plan").tag("plan")
-                            Text("Auto").tag("auto")
-                            Text("Accept Edits").tag("acceptEdits")
-                            Text("Bypass All").tag("bypassPermissions")
-                        }
-                        .pickerStyle(.segmented)
-                        .onChange(of: permissionMode) { _, val in
-                            onPermissionModeChange(val)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("System Prompt")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        TextEditor(text: $systemPromptText)
-                            .font(.system(size: 13))
-                            .frame(width: 380, height: 120)
-                            .onChange(of: systemPromptText) { _, val in
-                                onSystemPromptChange(val)
-                            }
-                    }
-
-                    if conversation.queuedPromptCount > 0 {
-                        Text(conversation.queuedPromptCount == 1 ? "1 prompt queued" : "\(conversation.queuedPromptCount) prompts queued")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(16)
-            }
-
-            Button {
                 onDelete()
             } label: {
                 Image(systemName: "xmark")
@@ -691,28 +639,20 @@ struct AgentNodePanel: View {
                 }
                 .menuStyle(.borderlessButton)
 
-                Menu {
-                    ForEach(efforts, id: \.0) { id, name in
-                        Button {
-                            selectedEffort = id
-                            onEffortChange(id)
-                        } label: {
-                            if id == selectedEffort {
-                                Label(name, systemImage: "checkmark")
-                            } else {
-                                Text(name)
-                            }
-                        }
-                    }
+                Button {
+                    showSettings.toggle()
                 } label: {
-                    Text(efforts.first(where: { $0.0 == selectedEffort })?.1 ?? selectedEffort)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.55))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(!systemPromptText.isEmpty || permissionMode != "auto" || selectedEffort != "high" ? .purple : .white.opacity(0.45))
+                        .frame(width: 28, height: 24)
                         .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
                 }
-                .menuStyle(.borderlessButton)
+                .buttonStyle(.plain)
+                .help("Settings")
+                .popover(isPresented: $showSettings) {
+                    settingsPopover
+                }
 
                 Spacer()
 
@@ -752,6 +692,130 @@ struct AgentNodePanel: View {
         )
         .padding(.horizontal, 10)
         .padding(.vertical, 10)
+    }
+
+    private var settingsPopover: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Effort
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Effort")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                ForEach(efforts, id: \.0) { id, name in
+                    Button {
+                        selectedEffort = id
+                        onEffortChange(id)
+                    } label: {
+                        HStack(spacing: 8) {
+                            if id == selectedEffort {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .frame(width: 16)
+                            } else {
+                                Spacer().frame(width: 16)
+                            }
+                            Text(id == "high" ? "\(name) (default)" : name)
+                                .font(.system(size: 14))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Divider()
+
+            // Mode
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Mode")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                ForEach([("auto", "Auto (default)"), ("plan", "Plan")], id: \.0) { id, name in
+                    Button {
+                        permissionMode = id
+                        onPermissionModeChange(id)
+                    } label: {
+                        HStack(spacing: 8) {
+                            if id == permissionMode || (id == "auto" && !["auto", "plan"].contains(permissionMode)) {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .frame(width: 16)
+                            } else {
+                                Spacer().frame(width: 16)
+                            }
+                            Text(name)
+                                .font(.system(size: 14))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Divider()
+
+            // Access
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Access")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                let accessOptions: [(String, String)] = [
+                    ("default", "Supervised"),
+                    ("acceptEdits", "Accept Edits"),
+                    ("bypassPermissions", "Full access"),
+                ]
+                ForEach(accessOptions, id: \.0) { id, name in
+                    let isSelected = (id == "default" && ["default", "auto", "plan"].contains(permissionMode))
+                        || (id == "acceptEdits" && permissionMode == "acceptEdits")
+                        || (id == "bypassPermissions" && permissionMode == "bypassPermissions")
+                    Button {
+                        // Map access to permission mode, preserving the current mode choice
+                        switch id {
+                        case "acceptEdits":
+                            permissionMode = "acceptEdits"
+                        case "bypassPermissions":
+                            permissionMode = "bypassPermissions"
+                        default:
+                            permissionMode = "auto"
+                        }
+                        onPermissionModeChange(permissionMode)
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isSelected {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .frame(width: 16)
+                            } else {
+                                Spacer().frame(width: 16)
+                            }
+                            Text(name)
+                                .font(.system(size: 14))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            // System prompt (collapsible)
+            if !systemPromptText.isEmpty {
+                Divider()
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("System Prompt")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text(systemPromptText)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.primary.opacity(0.7))
+                        .lineLimit(2)
+                }
+            }
+        }
+        .padding(14)
+        .frame(width: 220)
     }
 
     private var canSend: Bool {
