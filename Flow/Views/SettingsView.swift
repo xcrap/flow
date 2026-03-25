@@ -54,6 +54,20 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(minWidth: 400, maxWidth: .infinity, minHeight: 400, maxHeight: .infinity)
+        .frame(minWidth: 400, minHeight: 400)
+        .background(SettingsWindowResizer())
     }
+}
+
+/// Injects into the NSWindow hosting the Settings view to force it resizable.
+private struct SettingsWindowResizer: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            view.window?.styleMask.insert(.resizable)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }
