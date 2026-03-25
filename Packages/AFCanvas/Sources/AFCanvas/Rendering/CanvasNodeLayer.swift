@@ -9,6 +9,15 @@ public struct CanvasNodeLayer: View {
     @State private var renamingNodeID: UUID?
     @State private var renameText: String = ""
 
+    /// Tracks the initial size and center position at the start of a resize gesture.
+    private struct ResizeStart {
+        let startWidth: Double
+        let startHeight: Double
+        let centerX: Double
+        let centerY: Double
+    }
+    @State private var resizeStart: ResizeStart?
+
     private let viewportBuffer: Double = 500
 
     private var visibleNodes: [WorkflowNode] {
@@ -169,39 +178,28 @@ public struct CanvasNodeLayer: View {
                 if projectState.canvasState.draggedNodeID != nodeID {
                     projectState.canvasState.draggedNodeID = nodeID
                     if let node = projectState.nodes[nodeID] {
-                        // Store: x = startWidth, y = startHeight
-                        // Also store center position to adjust for top-left anchoring
-                        projectState.dragStartPositions[nodeID] = CGPoint(
-                            x: node.position.width,
-                            y: node.position.height
-                        )
-                        // Store original center as a second entry
-                        let centerKey = UUID(uuid: (nodeID.uuid.0 ^ 0xFF, nodeID.uuid.1, nodeID.uuid.2, nodeID.uuid.3, nodeID.uuid.4, nodeID.uuid.5, nodeID.uuid.6, nodeID.uuid.7, nodeID.uuid.8, nodeID.uuid.9, nodeID.uuid.10, nodeID.uuid.11, nodeID.uuid.12, nodeID.uuid.13, nodeID.uuid.14, nodeID.uuid.15))
-                        projectState.dragStartPositions[centerKey] = CGPoint(
-                            x: node.position.x,
-                            y: node.position.y
+                        resizeStart = ResizeStart(
+                            startWidth: node.position.width,
+                            startHeight: node.position.height,
+                            centerX: node.position.x,
+                            centerY: node.position.y
                         )
                     }
                 }
 
-                if let startSize = projectState.dragStartPositions[nodeID] {
-                    let newWidth = max(280, startSize.x + dw)
-                    let newHeight = max(200, startSize.y + dh)
-
-                    // Shift center so top-left stays fixed
-                    let centerKey = UUID(uuid: (nodeID.uuid.0 ^ 0xFF, nodeID.uuid.1, nodeID.uuid.2, nodeID.uuid.3, nodeID.uuid.4, nodeID.uuid.5, nodeID.uuid.6, nodeID.uuid.7, nodeID.uuid.8, nodeID.uuid.9, nodeID.uuid.10, nodeID.uuid.11, nodeID.uuid.12, nodeID.uuid.13, nodeID.uuid.14, nodeID.uuid.15))
-                    if let startCenter = projectState.dragStartPositions[centerKey] {
-                        projectState.nodes[nodeID]?.position.x = startCenter.x + (newWidth - startSize.x) / 2
-                        projectState.nodes[nodeID]?.position.y = startCenter.y + (newHeight - startSize.y) / 2
-                    }
-
+                if let rs = resizeStart {
+                    let newWidth = max(280, rs.startWidth + dw)
+                    let newHeight = max(200, rs.startHeight + dh)
+                    projectState.nodes[nodeID]?.position.x = rs.centerX + (newWidth - rs.startWidth) / 2
+                    projectState.nodes[nodeID]?.position.y = rs.centerY + (newHeight - rs.startHeight) / 2
                     projectState.nodes[nodeID]?.position.width = newWidth
                     projectState.nodes[nodeID]?.position.height = newHeight
                 }
             }
             .onEnded { _ in
                 projectState.canvasState.draggedNodeID = nil
-                projectState.clearDragStartPositions()
+                resizeStart = nil
+                projectState.onChange?()
             }
     }
 
@@ -217,40 +215,32 @@ public struct CanvasNodeLayer: View {
                 if projectState.canvasState.draggedNodeID != nodeID {
                     projectState.canvasState.draggedNodeID = nodeID
                     if let node = projectState.nodes[nodeID] {
-                        projectState.dragStartPositions[nodeID] = CGPoint(
-                            x: node.position.width,
-                            y: node.position.height
-                        )
-                        let centerKey = UUID(uuid: (nodeID.uuid.0 ^ 0xFF, nodeID.uuid.1, nodeID.uuid.2, nodeID.uuid.3, nodeID.uuid.4, nodeID.uuid.5, nodeID.uuid.6, nodeID.uuid.7, nodeID.uuid.8, nodeID.uuid.9, nodeID.uuid.10, nodeID.uuid.11, nodeID.uuid.12, nodeID.uuid.13, nodeID.uuid.14, nodeID.uuid.15))
-                        projectState.dragStartPositions[centerKey] = CGPoint(
-                            x: node.position.x,
-                            y: node.position.y
+                        resizeStart = ResizeStart(
+                            startWidth: node.position.width,
+                            startHeight: node.position.height,
+                            centerX: node.position.x,
+                            centerY: node.position.y
                         )
                     }
                 }
 
-                if let startSize = projectState.dragStartPositions[nodeID] {
-                    let centerKey = UUID(uuid: (nodeID.uuid.0 ^ 0xFF, nodeID.uuid.1, nodeID.uuid.2, nodeID.uuid.3, nodeID.uuid.4, nodeID.uuid.5, nodeID.uuid.6, nodeID.uuid.7, nodeID.uuid.8, nodeID.uuid.9, nodeID.uuid.10, nodeID.uuid.11, nodeID.uuid.12, nodeID.uuid.13, nodeID.uuid.14, nodeID.uuid.15))
-
+                if let rs = resizeStart {
                     switch edge {
                     case .right:
-                        let newWidth = max(280, startSize.x + dw)
+                        let newWidth = max(280, rs.startWidth + dw)
                         projectState.nodes[nodeID]?.position.width = newWidth
-                        if let startCenter = projectState.dragStartPositions[centerKey] {
-                            projectState.nodes[nodeID]?.position.x = startCenter.x + (newWidth - startSize.x) / 2
-                        }
+                        projectState.nodes[nodeID]?.position.x = rs.centerX + (newWidth - rs.startWidth) / 2
                     case .bottom:
-                        let newHeight = max(200, startSize.y + dh)
+                        let newHeight = max(200, rs.startHeight + dh)
                         projectState.nodes[nodeID]?.position.height = newHeight
-                        if let startCenter = projectState.dragStartPositions[centerKey] {
-                            projectState.nodes[nodeID]?.position.y = startCenter.y + (newHeight - startSize.y) / 2
-                        }
+                        projectState.nodes[nodeID]?.position.y = rs.centerY + (newHeight - rs.startHeight) / 2
                     }
                 }
             }
             .onEnded { _ in
                 projectState.canvasState.draggedNodeID = nil
-                projectState.clearDragStartPositions()
+                resizeStart = nil
+                projectState.onChange?()
             }
     }
 

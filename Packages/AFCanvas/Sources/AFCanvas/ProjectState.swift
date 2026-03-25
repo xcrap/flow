@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import AFCore
 
 @Observable
@@ -152,6 +153,81 @@ public final class ProjectState {
 
     public var sortedNodes: [WorkflowNode] {
         nodes.values.sorted { $0.position.x < $1.position.x }
+    }
+
+    // MARK: - Layout
+
+    public func fitToScreen(viewportSize: CGSize) {
+        guard !nodes.isEmpty else { return }
+
+        let allNodes = Array(nodes.values)
+        var minX = Double.infinity, minY = Double.infinity
+        var maxX = -Double.infinity, maxY = -Double.infinity
+
+        for node in allNodes {
+            minX = min(minX, node.position.x - node.position.width / 2)
+            minY = min(minY, node.position.y - node.position.height / 2)
+            maxX = max(maxX, node.position.x + node.position.width / 2)
+            maxY = max(maxY, node.position.y + node.position.height / 2)
+        }
+
+        let contentWidth = max(1, maxX - minX)
+        let contentHeight = max(1, maxY - minY)
+        let padding: Double = 60
+
+        let availW = max(1, viewportSize.width - padding * 2)
+        let availH = max(1, viewportSize.height - padding * 2)
+        let newZoom = max(0.15, min(1.5, min(availW / contentWidth, availH / contentHeight)))
+
+        let cx = (minX + maxX) / 2
+        let cy = (minY + maxY) / 2
+
+        withAnimation(.spring(duration: 0.4)) {
+            canvasState.zoom = newZoom
+            canvasState.offset = CGPoint(
+                x: viewportSize.width / 2 - cx * newZoom,
+                y: viewportSize.height / 2 - cy * newZoom
+            )
+        }
+        onChange?()
+    }
+
+    public func tidyUp(viewportSize: CGSize) {
+        let sortedNodes = nodes.values.sorted {
+            if abs($0.position.y - $1.position.y) < 100 {
+                return $0.position.x < $1.position.x
+            }
+            return $0.position.y < $1.position.y
+        }
+        guard !sortedNodes.isEmpty else { return }
+
+        let gap: Double = 20
+        let columns = max(1, Int(ceil(sqrt(Double(sortedNodes.count)))))
+
+        withAnimation(.spring(duration: 0.5)) {
+            var cursorX: Double = 0
+            var cursorY: Double = 0
+            var rowHeight: Double = 0
+
+            for (index, node) in sortedNodes.enumerated() {
+                let col = index % columns
+                if col == 0 && index > 0 {
+                    cursorX = 0
+                    cursorY += rowHeight + gap
+                    rowHeight = 0
+                }
+                let w = node.position.width
+                let h = node.position.height
+                nodes[node.id]?.position.x = cursorX + w / 2
+                nodes[node.id]?.position.y = cursorY + h / 2
+                cursorX += w + gap
+                rowHeight = max(rowHeight, h)
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.fitToScreen(viewportSize: viewportSize)
+        }
     }
 
     private func defaultConfiguration(for kind: NodeKind) -> NodeConfiguration {

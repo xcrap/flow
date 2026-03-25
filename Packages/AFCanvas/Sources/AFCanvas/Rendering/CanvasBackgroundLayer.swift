@@ -21,15 +21,17 @@ struct CanvasBackgroundLayer: View {
         let startX = canvasState.offset.x.truncatingRemainder(dividingBy: gridSize)
         let startY = canvasState.offset.y.truncatingRemainder(dividingBy: gridSize)
 
+        // Batch all dots into a single path to avoid per-dot allocations
+        var dots = Path()
         var x = startX
         while x < size.width {
             var y = startY
             while y < size.height {
-                let dot = Path(ellipseIn: CGRect(x: x - 1, y: y - 1, width: 2, height: 2))
-                context.fill(dot, with: .color(dotColor))
+                dots.addEllipse(in: CGRect(x: x - 1, y: y - 1, width: 2, height: 2))
                 y += gridSize
             }
             x += gridSize
         }
+        context.fill(dots, with: .color(dotColor))
     }
 }

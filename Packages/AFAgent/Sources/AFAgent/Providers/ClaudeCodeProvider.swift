@@ -1,8 +1,30 @@
 import Foundation
+import os
 import AFCore
 
-private final class ClaudeLineBuffer: @unchecked Sendable {
-    var value = ""
+private struct ClaudeLineBuffer: Sendable {
+    private let storage = OSAllocatedUnfairLock(initialState: "")
+    private static let maxBufferSize = 1_048_576 // 1MB
+
+    func append(_ text: String) -> [String] {
+        storage.withLock { value in
+            value += text
+            if value.count > Self.maxBufferSize {
+                value = String(value.suffix(Self.maxBufferSize))
+            }
+            let parts = value.components(separatedBy: "\n")
+            value = parts.last ?? ""
+            return Array(parts.dropLast())
+        }
+    }
+
+    func flush() -> String {
+        storage.withLock { value in
+            let v = value
+            value = ""
+            return v
+        }
+    }
 }
 
 private let claudeEffectiveContextWindow = 200_000
@@ -201,9 +223,9 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
             handle.readabilityHandler = { fileHandle in
                 let data = fileHandle.availableData
                 guard !data.isEmpty else {
-                    if !buffer.value.isEmpty {
-                        Self.parseBufferedLines(buffer.value, continuation: continuation)
-                        buffer.value = ""
+                    let remaining = buffer.flush()
+                    if !remaining.isEmpty {
+                        Self.parseBufferedLines(remaining, continuation: continuation)
                     }
                     fileHandle.readabilityHandler = nil
                     continuation.yield(.done(stopReason: "end_turn"))
@@ -213,11 +235,9 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
                 }
 
                 guard let text = String(data: data, encoding: .utf8) else { return }
-                buffer.value += text
-                let lines = buffer.value.components(separatedBy: "\n")
-                buffer.value = lines.last ?? ""
+                let completedLines = buffer.append(text)
 
-                for line in lines.dropLast() where !line.isEmpty {
+                for line in completedLines where !line.isEmpty {
                     if let event = Self.parseStreamEvent(line) {
                         continuation.yield(event)
                     }

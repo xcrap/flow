@@ -226,22 +226,7 @@ struct ProjectSidebarView: View {
         let conversation = conversations[node.id]
         let runtimePhase = conversation?.runtimePhase ?? .idle
         let isWorking = runtimePhase.isWorking
-        let statusColor: Color = switch runtimePhase {
-        case .responding:
-            Color(red: 0.24, green: 0.82, blue: 0.43)
-        case .preparing:
-            Color(red: 0.88, green: 0.67, blue: 0.22)
-        case .compacting:
-            Color(red: 0.93, green: 0.58, blue: 0.18)
-        case .compacted:
-            Color(red: 0.48, green: 0.72, blue: 0.58)
-        case .cancelling:
-            Color.orange
-        case .failed:
-            Color.red.opacity(0.9)
-        case .idle:
-            Color.white.opacity(0.34)
-        }
+        let statusColor = runtimePhase.statusColor
         let previewText = (isWorking ? conversation?.latestRuntimeActivity?.summary : nil)
             ?? (conversation?.latestPreviewText?.isEmpty == false ? conversation?.latestPreviewText : nil)
             ?? "Start a conversation"

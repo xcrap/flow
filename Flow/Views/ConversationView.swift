@@ -16,22 +16,7 @@ struct ConversationView: View {
             // Header
             HStack {
                 HStack(spacing: 8) {
-                    let statusColor: Color = switch conversationState.runtimePhase {
-                    case .responding:
-                        .green
-                    case .preparing:
-                        Color(red: 0.88, green: 0.67, blue: 0.22)
-                    case .compacting:
-                        Color(red: 0.93, green: 0.58, blue: 0.18)
-                    case .compacted:
-                        Color(red: 0.48, green: 0.72, blue: 0.58)
-                    case .cancelling:
-                        .orange
-                    case .failed:
-                        .red
-                    case .idle:
-                        Color.white.opacity(0.38)
-                    }
+                    let statusColor = conversationState.runtimePhase.statusColor
 
                     ZStack {
                         Circle()
@@ -254,32 +239,7 @@ struct ConversationView: View {
     // MARK: - Message Grouping
 
     private var groupedMessages: [MessageGroup] {
-        var groups: [MessageGroup] = []
-        var toolBatch: [ConversationMessage] = []
-        for message in conversationState.messages {
-            if Self.isToolMessage(message) {
-                toolBatch.append(message)
-            } else {
-                if !toolBatch.isEmpty {
-                    groups.append(.toolCalls(toolBatch))
-                    toolBatch = []
-                }
-                groups.append(.single(message))
-            }
-        }
-        if !toolBatch.isEmpty {
-            groups.append(.toolCalls(toolBatch))
-        }
-        return groups
-    }
-
-    private static func isToolMessage(_ message: ConversationMessage) -> Bool {
-        if message.role == .tool { return true }
-        guard !message.content.isEmpty else { return false }
-        return message.content.allSatisfy { content in
-            if case .toolUse = content { return true }
-            return false
-        }
+        MessageGroup.group(conversationState.messages)
     }
 }
 
@@ -399,7 +359,60 @@ enum MessageGroup: Identifiable {
     var id: UUID {
         switch self {
         case .single(let msg): msg.id
-        case .toolCalls(let msgs): msgs.first!.id
+        case .toolCalls(let msgs): msgs.first?.id ?? UUID()
+        }
+    }
+
+    /// Groups messages by collapsing consecutive tool-related messages into batches.
+    static func group(_ messages: [ConversationMessage]) -> [MessageGroup] {
+        var groups: [MessageGroup] = []
+        var toolBatch: [ConversationMessage] = []
+        for message in messages {
+            if isToolMessage(message) {
+                toolBatch.append(message)
+            } else {
+                if !toolBatch.isEmpty {
+                    groups.append(.toolCalls(toolBatch))
+                    toolBatch = []
+                }
+                groups.append(.single(message))
+            }
+        }
+        if !toolBatch.isEmpty {
+            groups.append(.toolCalls(toolBatch))
+        }
+        return groups
+    }
+
+    static func isToolMessage(_ message: ConversationMessage) -> Bool {
+        if message.role == .tool { return true }
+        guard !message.content.isEmpty else { return false }
+        return message.content.allSatisfy { content in
+            if case .toolUse = content { return true }
+            return false
+        }
+    }
+}
+
+// MARK: - Shared Status Color
+
+extension ProviderSessionPhase {
+    var statusColor: Color {
+        switch self {
+        case .responding:
+            Color(red: 0.25, green: 0.83, blue: 0.43)
+        case .preparing:
+            Color(red: 0.88, green: 0.67, blue: 0.22)
+        case .compacting:
+            Color(red: 0.93, green: 0.58, blue: 0.18)
+        case .compacted:
+            Color(red: 0.48, green: 0.72, blue: 0.58)
+        case .cancelling:
+            .orange
+        case .failed:
+            .red
+        case .idle:
+            Color.white.opacity(0.38)
         }
     }
 }

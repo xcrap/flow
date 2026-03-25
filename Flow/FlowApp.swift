@@ -44,24 +44,8 @@ struct FlowApp: App {
                     return nil
 
                 case "c":
-                    guard let project = appState.activeProject, !project.nodes.isEmpty else { return nil }
-                    let nodes = Array(project.nodes.values)
-                    var minX = Double.infinity, minY = Double.infinity
-                    var maxX = -Double.infinity, maxY = -Double.infinity
-                    for node in nodes {
-                        minX = min(minX, node.position.x - node.position.width / 2)
-                        minY = min(minY, node.position.y - node.position.height / 2)
-                        maxX = max(maxX, node.position.x + node.position.width / 2)
-                        maxY = max(maxY, node.position.y + node.position.height / 2)
-                    }
-                    let contentW = max(1, maxX - minX), contentH = max(1, maxY - minY)
-                    let vp = project.canvasState.viewportSize
-                    let padding: Double = 60
-                    let zoom = max(0.15, min(1.5, min((vp.width - padding * 2) / contentW, (vp.height - padding * 2) / contentH)))
-                    let cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
-                    withAnimation(.spring(duration: 0.4)) {
-                        project.canvasState.zoom = zoom
-                        project.canvasState.offset = CGPoint(x: vp.width / 2 - cx * zoom, y: vp.height / 2 - cy * zoom)
+                    if let project = appState.activeProject, !project.nodes.isEmpty {
+                        project.fitToScreen(viewportSize: project.canvasState.viewportSize)
                     }
                     return nil
 

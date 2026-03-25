@@ -249,89 +249,11 @@ struct ProjectEditorView: View {
     // MARK: - Layout
 
     private func fitToScreen(project: ProjectState, viewportSize: CGSize) {
-        guard !project.nodes.isEmpty else { return }
-
-        let nodes = Array(project.nodes.values)
-
-        // Calculate bounding box of all nodes
-        var minX = Double.infinity, minY = Double.infinity
-        var maxX = -Double.infinity, maxY = -Double.infinity
-
-        for node in nodes {
-            minX = min(minX, node.position.x - node.position.width / 2)
-            minY = min(minY, node.position.y - node.position.height / 2)
-            maxX = max(maxX, node.position.x + node.position.width / 2)
-            maxY = max(maxY, node.position.y + node.position.height / 2)
-        }
-
-        let contentWidth = max(1, maxX - minX)
-        let contentHeight = max(1, maxY - minY)
-        let padding: Double = 60
-
-        // Zoom to fit all content with padding
-        let availW = max(1, viewportSize.width - padding * 2)
-        let availH = max(1, viewportSize.height - padding * 2)
-        let newZoom = max(0.15, min(1.5, min(availW / contentWidth, availH / contentHeight)))
-
-        // Center of all nodes in canvas space
-        let cx = (minX + maxX) / 2
-        let cy = (minY + maxY) / 2
-
-        // Offset so that canvas center maps to screen center
-        // screen = canvas * zoom + offset → offset = screenCenter - canvasCenter * zoom
-        let newOffsetX = viewportSize.width / 2 - cx * newZoom
-        let newOffsetY = viewportSize.height / 2 - cy * newZoom
-
-        withAnimation(.spring(duration: 0.4)) {
-            project.canvasState.zoom = newZoom
-            project.canvasState.offset = CGPoint(x: newOffsetX, y: newOffsetY)
-        }
-        project.onChange?()
+        project.fitToScreen(viewportSize: viewportSize)
     }
 
     private func tidyUp(project: ProjectState, viewportSize: CGSize) {
-        // Sort by creation order (position on canvas: left-to-right, top-to-bottom)
-        let sortedNodes = project.nodes.values.sorted {
-            if abs($0.position.y - $1.position.y) < 100 {
-                return $0.position.x < $1.position.x
-            }
-            return $0.position.y < $1.position.y
-        }
-        guard !sortedNodes.isEmpty else { return }
-
-        let gap: Double = 20
-        let columns = max(1, Int(ceil(sqrt(Double(sortedNodes.count)))))
-
-        withAnimation(.spring(duration: 0.5)) {
-            // Place nodes in a grid, using each node's actual size
-            var cursorX: Double = 0
-            var cursorY: Double = 0
-            var rowHeight: Double = 0
-
-            for (index, node) in sortedNodes.enumerated() {
-                let col = index % columns
-
-                if col == 0 && index > 0 {
-                    // New row
-                    cursorX = 0
-                    cursorY += rowHeight + gap
-                    rowHeight = 0
-                }
-
-                let w = node.position.width
-                let h = node.position.height
-
-                project.nodes[node.id]?.position.x = cursorX + w / 2
-                project.nodes[node.id]?.position.y = cursorY + h / 2
-
-                cursorX += w + gap
-                rowHeight = max(rowHeight, h)
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            fitToScreen(project: project, viewportSize: viewportSize)
-        }
+        project.tidyUp(viewportSize: viewportSize)
     }
 
     // MARK: - Node Panels
@@ -601,6 +523,9 @@ struct ProjectEditorView: View {
                 session.shutdown()
             }
         }
+
+        // Stop git polling for the deleted project
+        gitStatus.stopPolling(projectID: projectID)
 
         conversationsByProject.removeValue(forKey: projectID)
         terminalSessionsByProject.removeValue(forKey: projectID)

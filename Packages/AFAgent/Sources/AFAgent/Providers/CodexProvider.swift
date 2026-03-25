@@ -228,8 +228,15 @@ private actor CodexSession {
         ])
     }
 
+    private static let maxLineBufferSize = 1_048_576 // 1MB
+
     private func consume(fragment: String) {
         lineBuffer += fragment
+
+        // Prevent unbounded growth from malformed/incomplete lines
+        if lineBuffer.count > Self.maxLineBufferSize {
+            lineBuffer = String(lineBuffer.suffix(Self.maxLineBufferSize))
+        }
 
         while let newlineRange = lineBuffer.range(of: "\n") {
             let line = String(lineBuffer[..<newlineRange.lowerBound])

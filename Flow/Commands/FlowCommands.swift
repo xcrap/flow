@@ -111,76 +111,13 @@ struct FlowCommands: Commands {
     }
 
     private func fitToScreen() {
-        guard let project = appState.activeProject, !project.nodes.isEmpty else { return }
-
-        let nodes = Array(project.nodes.values)
-        var minX = Double.infinity, minY = Double.infinity
-        var maxX = -Double.infinity, maxY = -Double.infinity
-
-        for node in nodes {
-            minX = min(minX, node.position.x - node.position.width / 2)
-            minY = min(minY, node.position.y - node.position.height / 2)
-            maxX = max(maxX, node.position.x + node.position.width / 2)
-            maxY = max(maxY, node.position.y + node.position.height / 2)
-        }
-
-        let contentWidth = max(1, maxX - minX)
-        let contentHeight = max(1, maxY - minY)
-        let padding: Double = 60
-        let viewportSize = project.canvasState.viewportSize
-
-        let availW = max(1, viewportSize.width - padding * 2)
-        let availH = max(1, viewportSize.height - padding * 2)
-        let newZoom = max(0.15, min(1.5, min(availW / contentWidth, availH / contentHeight)))
-
-        let cx = (minX + maxX) / 2
-        let cy = (minY + maxY) / 2
-        let newOffsetX = viewportSize.width / 2 - cx * newZoom
-        let newOffsetY = viewportSize.height / 2 - cy * newZoom
-
-        withAnimation(.spring(duration: 0.4)) {
-            project.canvasState.zoom = newZoom
-            project.canvasState.offset = CGPoint(x: newOffsetX, y: newOffsetY)
-        }
+        guard let project = appState.activeProject else { return }
+        project.fitToScreen(viewportSize: project.canvasState.viewportSize)
     }
 
     private func tidyUp() {
-        guard let project = appState.activeProject, project.nodes.count > 1 else { return }
-
-        let sortedNodes = project.nodes.values.sorted {
-            if abs($0.position.y - $1.position.y) < 100 {
-                return $0.position.x < $1.position.x
-            }
-            return $0.position.y < $1.position.y
-        }
-
-        let gap: Double = 20
-        let columns = max(1, Int(ceil(sqrt(Double(sortedNodes.count)))))
-
-        withAnimation(.spring(duration: 0.5)) {
-            var cursorX: Double = 0
-            var cursorY: Double = 0
-            var rowHeight: Double = 0
-
-            for (index, node) in sortedNodes.enumerated() {
-                let col = index % columns
-                if col == 0 && index > 0 {
-                    cursorX = 0
-                    cursorY += rowHeight + gap
-                    rowHeight = 0
-                }
-                let w = node.position.width
-                let h = node.position.height
-                project.nodes[node.id]?.position.x = cursorX + w / 2
-                project.nodes[node.id]?.position.y = cursorY + h / 2
-                cursorX += w + gap
-                rowHeight = max(rowHeight, h)
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            fitToScreen()
-        }
+        guard let project = appState.activeProject else { return }
+        project.tidyUp(viewportSize: project.canvasState.viewportSize)
     }
 
     private func duplicateSelectedNodes() {

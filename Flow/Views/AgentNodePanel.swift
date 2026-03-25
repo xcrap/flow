@@ -194,22 +194,7 @@ struct AgentNodePanel: View {
     }
 
     private var statusColor: Color {
-        switch conversation.runtimePhase {
-        case .responding:
-            Color(red: 0.25, green: 0.83, blue: 0.43)
-        case .preparing:
-            Color(red: 0.88, green: 0.67, blue: 0.22)
-        case .compacting:
-            Color(red: 0.93, green: 0.58, blue: 0.18)
-        case .compacted:
-            Color(red: 0.48, green: 0.72, blue: 0.58)
-        case .cancelling:
-            .orange
-        case .failed:
-            .red
-        case .idle:
-            Color.white.opacity(0.38)
-        }
+        conversation.runtimePhase.statusColor
     }
 
     private var statusLabel: String {
@@ -343,32 +328,7 @@ struct AgentNodePanel: View {
     }
 
     private var groupedMessages: [MessageGroup] {
-        var groups: [MessageGroup] = []
-        var toolBatch: [ConversationMessage] = []
-        for message in conversation.messages {
-            if Self.isToolMessage(message) {
-                toolBatch.append(message)
-            } else {
-                if !toolBatch.isEmpty {
-                    groups.append(.toolCalls(toolBatch))
-                    toolBatch = []
-                }
-                groups.append(.single(message))
-            }
-        }
-        if !toolBatch.isEmpty {
-            groups.append(.toolCalls(toolBatch))
-        }
-        return groups
-    }
-
-    private static func isToolMessage(_ message: ConversationMessage) -> Bool {
-        if message.role == .tool { return true }
-        guard !message.content.isEmpty else { return false }
-        return message.content.allSatisfy { content in
-            if case .toolUse = content { return true }
-            return false
-        }
+        MessageGroup.group(conversation.messages)
     }
 
     @ViewBuilder

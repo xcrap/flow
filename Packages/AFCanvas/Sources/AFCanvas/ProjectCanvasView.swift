@@ -152,10 +152,20 @@ struct CanvasEventMonitor: ViewModifier {
     @State private var isPanning = false
     @State private var anchor = CanvasViewAnchor()
 
+    private func removeAllMonitors() {
+        if let m = scrollMonitor { NSEvent.removeMonitor(m); scrollMonitor = nil }
+        if let m = mouseDownMonitor { NSEvent.removeMonitor(m); mouseDownMonitor = nil }
+        if let m = dragMonitor { NSEvent.removeMonitor(m); dragMonitor = nil }
+        if let m = dragUpMonitor { NSEvent.removeMonitor(m); dragUpMonitor = nil }
+    }
+
     func body(content: Content) -> some View {
         content
             .background(CanvasAnchorRepresentable(anchor: anchor))
             .onAppear {
+                // Remove any existing monitors to prevent duplicate registration
+                removeAllMonitors()
+
                 scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [anchor] event in
                     if event.modifierFlags.contains(.command) {
                         // Convert window coordinates to canvas-local (flipped Y for SwiftUI)
@@ -200,10 +210,7 @@ struct CanvasEventMonitor: ViewModifier {
                 }
             }
             .onDisappear {
-                if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor) }
-                if let mouseDownMonitor { NSEvent.removeMonitor(mouseDownMonitor) }
-                if let dragMonitor { NSEvent.removeMonitor(dragMonitor) }
-                if let dragUpMonitor { NSEvent.removeMonitor(dragUpMonitor) }
+                removeAllMonitors()
             }
     }
 }
