@@ -184,7 +184,7 @@ public final class ConversationService {
                             kind: .tool,
                             tone: .working,
                             summary: name,
-                            detail: Self.summarizedRuntimeText(input),
+                            detail: Self.toolInputSummary(name: name, input: input),
                             state: "started",
                             turnID: conversationState.activeTurnID
                         )
@@ -334,6 +334,47 @@ public final class ConversationService {
         let next = queue.removeFirst()
         pendingRequests[nodeID] = queue.isEmpty ? nil : queue
         start(next, for: conversationState)
+    }
+
+    private static func toolInputSummary(name: String, input: String?) -> String? {
+        guard let input, !input.isEmpty, input != "{}" else { return nil }
+        guard let data = input.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return summarizedRuntimeText(input)
+        }
+
+        let summary: String? = switch name {
+        case "Read", "Edit", "Write":
+            (json["file_path"] as? String).map { path in
+                let short = path.components(separatedBy: "/").suffix(2).joined(separator: "/")
+                var result = short
+                if let offset = json["offset"] as? Int { result += ":\(offset)" }
+                if let limit = json["limit"] as? Int { result += " (\(limit) lines)" }
+                return result
+            }
+        case "Grep":
+            {
+                var parts: [String] = []
+                if let pattern = json["pattern"] as? String { parts.append("\"\(pattern)\"") }
+                if let type = json["type"] as? String { parts.append("in *.\(type)") }
+                else if let glob = json["glob"] as? String { parts.append("in \(glob)") }
+                return parts.isEmpty ? nil : parts.joined(separator: " ")
+            }()
+        case "Glob":
+            json["pattern"] as? String
+        case "Bash":
+            (json["command"] as? String).map {
+                String(($0.components(separatedBy: .newlines).first ?? $0).prefix(100))
+            }
+        case "Agent":
+            (json["description"] as? String) ?? (json["prompt"] as? String).map { String($0.prefix(80)) }
+        default:
+            (json["file_path"] as? String).map {
+                $0.components(separatedBy: "/").suffix(2).joined(separator: "/")
+            } ?? (json["pattern"] as? String) ?? (json["command"] as? String).map { String($0.prefix(80)) }
+        }
+
+        return summary ?? summarizedRuntimeText(input)
     }
 
     private static func summarizedRuntimeText(_ text: String?, limit: Int = 140) -> String? {

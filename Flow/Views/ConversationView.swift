@@ -91,9 +91,15 @@ struct ConversationView: View {
                             RuntimeActivityList(activities: conversationState.recentRuntimeActivities)
                         }
 
-                        ForEach(conversationState.messages) { message in
-                            MessageBubble(message: message)
-                                .id(message.id)
+                        ForEach(groupedMessages) { group in
+                            switch group {
+                            case .single(let message):
+                                MessageBubble(message: message)
+                                    .id(message.id)
+                            case .toolCalls(let messages):
+                                ToolCallGroupView(messages: messages)
+                                    .id(group.id)
+                            }
                         }
 
                         // Streaming text
@@ -111,13 +117,15 @@ struct ConversationView: View {
                 }
                 .onChange(of: conversationState.messages.count) {
                     withAnimation {
-                        proxy.scrollTo(conversationState.messages.last?.id, anchor: .bottom)
+                        if let lastGroup = groupedMessages.last {
+                            proxy.scrollTo(lastGroup.id, anchor: .bottom)
+                        }
                     }
                 }
                 .onChange(of: conversationState.runtimeActivities.count) {
                     withAnimation {
-                        if let lastMessageID = conversationState.messages.last?.id {
-                            proxy.scrollTo(lastMessageID, anchor: .bottom)
+                        if let lastGroup = groupedMessages.last {
+                            proxy.scrollTo(lastGroup.id, anchor: .bottom)
                         } else if conversationState.isStreaming {
                             proxy.scrollTo("streaming", anchor: .bottom)
                         }
@@ -242,6 +250,37 @@ struct ConversationView: View {
         inputText = ""
         onSend(text)
     }
+
+    // MARK: - Message Grouping
+
+    private var groupedMessages: [MessageGroup] {
+        var groups: [MessageGroup] = []
+        var toolBatch: [ConversationMessage] = []
+        for message in conversationState.messages {
+            if Self.isToolMessage(message) {
+                toolBatch.append(message)
+            } else {
+                if !toolBatch.isEmpty {
+                    groups.append(.toolCalls(toolBatch))
+                    toolBatch = []
+                }
+                groups.append(.single(message))
+            }
+        }
+        if !toolBatch.isEmpty {
+            groups.append(.toolCalls(toolBatch))
+        }
+        return groups
+    }
+
+    private static func isToolMessage(_ message: ConversationMessage) -> Bool {
+        if message.role == .tool { return true }
+        guard !message.content.isEmpty else { return false }
+        return message.content.allSatisfy { content in
+            if case .toolUse = content { return true }
+            return false
+        }
+    }
 }
 
 // MARK: - Message Bubble
@@ -348,5 +387,211 @@ struct MessageBubble: View {
                 .font(.title2)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+// MARK: - Message Grouping
+
+enum MessageGroup: Identifiable {
+    case single(ConversationMessage)
+    case toolCalls([ConversationMessage])
+
+    var id: UUID {
+        switch self {
+        case .single(let msg): msg.id
+        case .toolCalls(let msgs): msgs.first!.id
+        }
+    }
+}
+
+// MARK: - Tool Call Group
+
+struct ToolCallGroupView: View {
+    let messages: [ConversationMessage]
+    @State private var isExpanded = false
+
+    private var toolCalls: [(name: String, summary: String)] {
+        messages.compactMap { message in
+            for content in message.content {
+                if case .toolUse(_, let name, let input) = content {
+                    return (name: name, summary: Self.toolSummary(name: name, input: input))
+                }
+            }
+            return nil
+        }
+    }
+
+    private var uniqueToolNames: [String] {
+        var seen = Set<String>()
+        return toolCalls.compactMap { call in
+            seen.insert(call.name).inserted ? call.name : nil
+        }
+    }
+
+    private var errorResults: [String] {
+        messages.compactMap { message in
+            for content in message.content {
+                if case .toolResult(_, let resultContent, let isError) = content, isError {
+                    return resultContent
+                }
+            }
+            return nil
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "wrench.and.screwdriver")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.orange.opacity(0.7))
+
+                    Text(toolCalls.count == 1
+                         ? "1 tool call"
+                         : "\(toolCalls.count) tool calls")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+
+                    ForEach(uniqueToolNames.prefix(5), id: \.self) { name in
+                        Text(name)
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.orange.opacity(0.8))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(.orange.opacity(0.08), in: Capsule())
+                    }
+
+                    if uniqueToolNames.count > 5 {
+                        Text("+\(uniqueToolNames.count - 5)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                Divider()
+                    .opacity(0.5)
+                    .padding(.horizontal, 10)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    ForEach(Array(toolCalls.enumerated()), id: \.offset) { _, call in
+                        HStack(spacing: 6) {
+                            Text(call.name)
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.orange)
+                                .frame(minWidth: 36, alignment: .leading)
+
+                            if !call.summary.isEmpty {
+                                Text(call.summary)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 3)
+                    }
+
+                    ForEach(Array(errorResults.enumerated()), id: \.offset) { _, error in
+                        HStack(spacing: 4) {
+                            Image(systemName: "xmark.circle")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.red)
+                            Text(error)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.red.opacity(0.8))
+                                .lineLimit(2)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 2)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .background(.orange.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(.orange.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    // MARK: - Tool Summary Parsing
+
+    private static func toolSummary(name: String, input: String) -> String {
+        guard !input.isEmpty, input != "{}" else { return "" }
+
+        guard let data = input.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return String(input.prefix(80))
+        }
+
+        switch name {
+        case "Read":
+            guard let path = json["file_path"] as? String else { return "" }
+            var result = shortenPath(path)
+            if let offset = json["offset"] as? Int { result += ":\(offset)" }
+            if let limit = json["limit"] as? Int { result += " (\(limit) lines)" }
+            return result
+
+        case "Edit":
+            guard let path = json["file_path"] as? String else { return "" }
+            return shortenPath(path)
+
+        case "Write":
+            guard let path = json["file_path"] as? String else { return "" }
+            return shortenPath(path)
+
+        case "Grep":
+            var parts: [String] = []
+            if let pattern = json["pattern"] as? String { parts.append("\"\(pattern)\"") }
+            if let type = json["type"] as? String { parts.append("in *.\(type)") }
+            else if let glob = json["glob"] as? String { parts.append("in \(glob)") }
+            return parts.joined(separator: " ")
+
+        case "Glob":
+            if let pattern = json["pattern"] as? String { return pattern }
+            return ""
+
+        case "Bash":
+            if let command = json["command"] as? String {
+                return String((command.components(separatedBy: .newlines).first ?? command).prefix(80))
+            }
+            return ""
+
+        case "Agent":
+            if let desc = json["description"] as? String { return desc }
+            if let prompt = json["prompt"] as? String { return String(prompt.prefix(60)) }
+            return ""
+
+        default:
+            if let path = json["file_path"] as? String { return shortenPath(path) }
+            if let pattern = json["pattern"] as? String { return pattern }
+            if let command = json["command"] as? String { return String(command.prefix(60)) }
+            return ""
+        }
+    }
+
+    private static func shortenPath(_ path: String) -> String {
+        let components = path.components(separatedBy: "/")
+        if components.count <= 2 { return path }
+        return components.suffix(2).joined(separator: "/")
     }
 }

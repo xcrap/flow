@@ -285,13 +285,19 @@ struct AgentNodePanel: View {
                         emptyState
                     }
 
-                    if !conversation.recentRuntimeActivities.isEmpty {
-                        RuntimeActivityList(activities: conversation.recentRuntimeActivities)
+                    if !nonToolRuntimeActivities.isEmpty {
+                        RuntimeActivityList(activities: nonToolRuntimeActivities)
                     }
 
-                    ForEach(conversation.messages) { message in
-                        MessageRow(message: message)
-                            .id(message.id)
+                    ForEach(groupedMessages) { group in
+                        switch group {
+                        case .single(let message):
+                            MessageRow(message: message)
+                                .id(message.id)
+                        case .toolCalls(let messages):
+                            ToolCallGroupView(messages: messages)
+                                .id(group.id)
+                        }
                     }
 
                     if conversation.isStreaming && !conversation.streamingText.isEmpty {
@@ -307,13 +313,15 @@ struct AgentNodePanel: View {
             }
             .onChange(of: conversation.messages.count) {
                 withAnimation(.easeOut(duration: 0.15)) {
-                    proxy.scrollTo(conversation.messages.last?.id, anchor: .bottom)
+                    if let lastGroup = groupedMessages.last {
+                        proxy.scrollTo(lastGroup.id, anchor: .bottom)
+                    }
                 }
             }
             .onChange(of: conversation.runtimeActivities.count) {
                 withAnimation(.easeOut(duration: 0.15)) {
-                    if let lastMessageID = conversation.messages.last?.id {
-                        proxy.scrollTo(lastMessageID, anchor: .bottom)
+                    if let lastGroup = groupedMessages.last {
+                        proxy.scrollTo(lastGroup.id, anchor: .bottom)
                     } else if conversation.isStreaming {
                         proxy.scrollTo("streaming", anchor: .bottom)
                     }
@@ -322,6 +330,41 @@ struct AgentNodePanel: View {
             .onChange(of: conversation.streamingText) {
                 proxy.scrollTo("streaming", anchor: .bottom)
             }
+        }
+    }
+
+    // MARK: - Message Grouping
+
+    private var nonToolRuntimeActivities: [ConversationRuntimeActivity] {
+        conversation.recentRuntimeActivities.filter { $0.kind != .tool }
+    }
+
+    private var groupedMessages: [MessageGroup] {
+        var groups: [MessageGroup] = []
+        var toolBatch: [ConversationMessage] = []
+        for message in conversation.messages {
+            if Self.isToolMessage(message) {
+                toolBatch.append(message)
+            } else {
+                if !toolBatch.isEmpty {
+                    groups.append(.toolCalls(toolBatch))
+                    toolBatch = []
+                }
+                groups.append(.single(message))
+            }
+        }
+        if !toolBatch.isEmpty {
+            groups.append(.toolCalls(toolBatch))
+        }
+        return groups
+    }
+
+    private static func isToolMessage(_ message: ConversationMessage) -> Bool {
+        if message.role == .tool { return true }
+        guard !message.content.isEmpty else { return false }
+        return message.content.allSatisfy { content in
+            if case .toolUse = content { return true }
+            return false
         }
     }
 
