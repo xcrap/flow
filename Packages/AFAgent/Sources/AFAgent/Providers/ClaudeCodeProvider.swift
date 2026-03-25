@@ -58,15 +58,28 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
 
             continuation.onTermination = { @Sendable _ in
                 task.cancel()
-                if process.isRunning {
-                    process.terminate()
-                }
+                Self.forceKill(process)
             }
         }
 
         return ProviderStreamHandle(stream: stream) {
-            if process.isRunning {
-                process.terminate()
+            Self.forceKill(process)
+        }
+    }
+
+    private static func forceKill(_ process: Process) {
+        guard process.isRunning else { return }
+        // SIGINT first — Claude Code handles this gracefully
+        process.interrupt()
+        // If still running after 1s, force terminate
+        DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
+            guard process.isRunning else { return }
+            process.terminate()
+            // Last resort after another 1s
+            DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
+                if process.isRunning {
+                    kill(process.processIdentifier, SIGKILL)
+                }
             }
         }
     }

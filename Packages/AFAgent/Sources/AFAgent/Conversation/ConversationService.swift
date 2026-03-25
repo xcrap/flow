@@ -78,6 +78,9 @@ public final class ConversationService {
         Task {
             await activeRequest.cancel()
         }
+        // Clear pending queue so queued prompts don't auto-start after cancel
+        pendingRequests[nodeID] = nil
+        activeStates[nodeID]?.clearQueuedPrompts()
     }
 
     private func start(_ request: PendingRequest, for conversationState: ConversationState) {

@@ -69,6 +69,7 @@ public struct CanvasNodeLayer: View {
         let isTitleHovered = hoveredNodeID == node.id
 
         nodeContent(node, isSelected, isTitleHovered)
+            .id(node.id)
             .overlay(alignment: .top) {
                 HStack(spacing: 0) {
                     // Left: drag handle + hover area

@@ -107,6 +107,16 @@ struct AgentNodePanel: View {
         .onChange(of: isSelected) {
             restoreInputFocusIfNeeded()
         }
+        .onChange(of: node.id) {
+            // Sync @State with new node when SwiftUI reuses this view
+            let provider = node.configuration.providerID ?? "claude"
+            selectedProvider = provider
+            let models = availableModels(for: provider)
+            selectedModel = node.configuration.modelID ?? models.first?.id ?? "sonnet"
+            selectedEffort = node.configuration.effort ?? "high"
+            systemPromptText = node.configuration.systemPrompt ?? ""
+            permissionMode = node.configuration.triggerType ?? "auto"
+        }
     }
 
     private var providerOptions: [(id: String, name: String)] {
