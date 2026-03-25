@@ -18,7 +18,6 @@ Native macOS app for orchestrating AI agents and terminals on an infinite canvas
 ```bash
 make dev       # Debug build + open (dist/Flow-Dev.app)
 make build     # Release build (dist/Flow.app)
-make run       # Release build + open
 make test      # Run all package tests
 make clean     # Remove build artifacts
 ```

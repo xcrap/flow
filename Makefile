@@ -1,4 +1,4 @@
-.PHONY: dev build run test clean generate
+.PHONY: dev build test clean generate
 
 generate:
 	xcodegen generate
@@ -17,10 +17,6 @@ build: generate
 	mkdir -p dist
 	rm -rf dist/Flow.app
 	cp -R build/Flow.xcarchive/Products/Applications/Flow.app dist/Flow.app
-
-# Build release and open
-run: build
-	open dist/Flow.app
 
 test:
 	cd Packages/AFCore && swift test --quiet
