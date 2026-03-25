@@ -54,6 +54,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(minWidth: 400, idealWidth: 500, minHeight: 400, idealHeight: 560)
+        .frame(minWidth: 400, maxWidth: .infinity, minHeight: 400, maxHeight: .infinity)
     }
 }

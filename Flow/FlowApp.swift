@@ -113,5 +113,6 @@ struct FlowApp: App {
             SettingsView()
                 .environment(appState)
         }
+        .windowResizability(.contentSize)
     }
 }
