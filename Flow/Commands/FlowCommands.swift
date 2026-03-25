@@ -101,6 +101,12 @@ struct FlowCommands: Commands {
                 fitToScreen()
             }
             .keyboardShortcut("c", modifiers: .command)
+
+            Button("Tidy Up") {
+                tidyUp()
+            }
+            .keyboardShortcut("g", modifiers: .command)
+            .disabled(appState.activeProject == nil || (appState.activeProject?.nodes.count ?? 0) < 2)
         }
     }
 
@@ -135,6 +141,45 @@ struct FlowCommands: Commands {
         withAnimation(.spring(duration: 0.4)) {
             project.canvasState.zoom = newZoom
             project.canvasState.offset = CGPoint(x: newOffsetX, y: newOffsetY)
+        }
+    }
+
+    private func tidyUp() {
+        guard let project = appState.activeProject, project.nodes.count > 1 else { return }
+
+        let sortedNodes = project.nodes.values.sorted {
+            if abs($0.position.y - $1.position.y) < 100 {
+                return $0.position.x < $1.position.x
+            }
+            return $0.position.y < $1.position.y
+        }
+
+        let gap: Double = 20
+        let columns = max(1, Int(ceil(sqrt(Double(sortedNodes.count)))))
+
+        withAnimation(.spring(duration: 0.5)) {
+            var cursorX: Double = 0
+            var cursorY: Double = 0
+            var rowHeight: Double = 0
+
+            for (index, node) in sortedNodes.enumerated() {
+                let col = index % columns
+                if col == 0 && index > 0 {
+                    cursorX = 0
+                    cursorY += rowHeight + gap
+                    rowHeight = 0
+                }
+                let w = node.position.width
+                let h = node.position.height
+                project.nodes[node.id]?.position.x = cursorX + w / 2
+                project.nodes[node.id]?.position.y = cursorY + h / 2
+                cursorX += w + gap
+                rowHeight = max(rowHeight, h)
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            fitToScreen()
         }
     }
 

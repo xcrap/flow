@@ -4,6 +4,24 @@ struct SettingsView: View {
     @AppStorage("defaultProvider") private var defaultProvider = "claude"
     @AppStorage("gridVisible") private var gridVisible = true
 
+    private let shortcuts: [(String, String)] = [
+        ("New Project", "⌘N"),
+        ("New AI Agent", "⌘I"),
+        ("New Terminal", "⌘T"),
+        ("Command Palette", "⌘K"),
+        ("Close Node", "⌘W"),
+        ("Select All", "⌘A"),
+        ("Duplicate Selected", "⌘D"),
+        ("Delete Selected", "⌫"),
+        ("Toggle Sidebar", "⌘B"),
+        ("Zoom In", "⌘+"),
+        ("Zoom Out", "⌘−"),
+        ("Reset Zoom", "⌘0"),
+        ("Fit to Screen", "⌘C"),
+        ("Tidy Up", "⌘G"),
+        ("Send Message", "⌘↩"),
+    ]
+
     var body: some View {
         Form {
             Section {
@@ -20,8 +38,22 @@ struct SettingsView: View {
             } header: {
                 Label("Canvas", systemImage: "square.grid.3x3")
             }
+
+            Section {
+                ForEach(shortcuts, id: \.0) { shortcut in
+                    HStack {
+                        Text(shortcut.0)
+                        Spacer()
+                        Text(shortcut.1)
+                            .foregroundStyle(.secondary)
+                            .fontDesign(.monospaced)
+                    }
+                }
+            } header: {
+                Label("Keyboard Shortcuts", systemImage: "keyboard")
+            }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 260)
+        .frame(width: 460, height: 560)
     }
 }

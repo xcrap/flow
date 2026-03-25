@@ -189,7 +189,7 @@ struct ProjectEditorView: View {
                                     .frame(width: 28, height: 28)
                             }
                             .buttonStyle(.bordered)
-                            .help("Tidy up")
+                            .help("Tidy up (⌘G)")
                         }
 
                         Button {
