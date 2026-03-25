@@ -159,8 +159,17 @@ public final class ConversationState {
             messages.append(message)
         }
         streamingText = ""
-        runtimePhase = .idle
-        activeTurnID = nil
+
+        // tool_use stop reason means the AI will continue after tool execution — stay working
+        if stopReason == "tool_use" {
+            if runtimePhase != .cancelling {
+                runtimePhase = .responding
+            }
+        } else {
+            runtimePhase = .idle
+            activeTurnID = nil
+        }
+
         if let stopReason, !stopReason.isEmpty {
             lastStopReason = stopReason
         }
@@ -246,6 +255,12 @@ public final class ConversationState {
         let prompt = queuedPromptPreviews.removeFirst()
         queuedPromptCount = queuedPromptPreviews.count
         return prompt
+    }
+
+    public func removeQueuedPrompt(at index: Int) {
+        guard index >= 0, index < queuedPromptPreviews.count else { return }
+        queuedPromptPreviews.remove(at: index)
+        queuedPromptCount = queuedPromptPreviews.count
     }
 
     public func clearQueuedPrompts() {

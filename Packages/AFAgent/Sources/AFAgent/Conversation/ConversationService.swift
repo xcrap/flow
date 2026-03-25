@@ -67,6 +67,13 @@ public final class ConversationService {
         start(request, for: conversationState)
     }
 
+    public func removeQueuedPrompt(at index: Int, for nodeID: UUID, conversationState: ConversationState) {
+        guard var queue = pendingRequests[nodeID], index >= 0, index < queue.count else { return }
+        queue.remove(at: index)
+        pendingRequests[nodeID] = queue.isEmpty ? nil : queue
+        conversationState.removeQueuedPrompt(at: index)
+    }
+
     public func clearPendingRequests(for nodeID: UUID) {
         pendingRequests[nodeID] = nil
     }

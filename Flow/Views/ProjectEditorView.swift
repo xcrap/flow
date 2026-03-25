@@ -386,6 +386,9 @@ struct ProjectEditorView: View {
                         project.nodes[node.id]?.configuration.triggerType = mode
                         project.onChange?()
                     },
+                    onRemoveQueuedPrompt: { index in
+                        conversationService?.removeQueuedPrompt(at: index, for: node.id, conversationState: conversation)
+                    },
                     onDelete: {
                         project.removeNode(node.id)
                         conversationsByProject[projectID]?.removeValue(forKey: node.id)

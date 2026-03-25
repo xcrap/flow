@@ -17,6 +17,7 @@ struct AgentNodePanel: View {
     var onClearConversation: () -> Void
     var onSystemPromptChange: (String) -> Void
     var onPermissionModeChange: (String) -> Void
+    var onRemoveQueuedPrompt: (Int) -> Void
     var onDelete: () -> Void
 
     @State private var inputText = ""
@@ -48,6 +49,7 @@ struct AgentNodePanel: View {
         onClearConversation: @escaping () -> Void,
         onSystemPromptChange: @escaping (String) -> Void,
         onPermissionModeChange: @escaping (String) -> Void,
+        onRemoveQueuedPrompt: @escaping (Int) -> Void,
         onDelete: @escaping () -> Void
     ) {
         self.node = node
@@ -62,6 +64,7 @@ struct AgentNodePanel: View {
         self.onClearConversation = onClearConversation
         self.onSystemPromptChange = onSystemPromptChange
         self.onPermissionModeChange = onPermissionModeChange
+        self.onRemoveQueuedPrompt = onRemoveQueuedPrompt
         self.onDelete = onDelete
 
         let provider = node.configuration.providerID ?? "claude"
@@ -406,6 +409,18 @@ struct AgentNodePanel: View {
                                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                                     .foregroundStyle(.secondary)
                             }
+
+                            Button {
+                                onRemoveQueuedPrompt(index)
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 16, height: 16)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .help("Remove from queue")
                         }
                     }
 
