@@ -46,6 +46,7 @@ struct FlowCommands: Commands {
             Button("Close Node") {
                 if let project = appState.activeProject, !project.selectedNodeIDs.isEmpty {
                     project.deleteSelected()
+                    appState.flushSaveNow()
                 }
             }
             .keyboardShortcut("w", modifiers: .command)
@@ -58,7 +59,10 @@ struct FlowCommands: Commands {
             .keyboardShortcut("d", modifiers: .command)
 
             Button("Delete Selected") {
-                appState.activeProject?.deleteSelected()
+                if appState.activeProject?.selectedNodeIDs.isEmpty == false {
+                    appState.activeProject?.deleteSelected()
+                    appState.flushSaveNow()
+                }
             }
             .keyboardShortcut(.delete, modifiers: [])
         }

@@ -27,6 +27,7 @@ struct FlowApp: App {
                 case "w":
                     if let project = appState.activeProject, !project.selectedNodeIDs.isEmpty {
                         project.deleteSelected()
+                        appState.flushSaveNow()
                     }
                     return nil
 
@@ -61,6 +62,7 @@ struct FlowApp: App {
                 }
                 if let project = appState.activeProject, !project.selectedNodeIDs.isEmpty {
                     project.deleteSelected()
+                    appState.flushSaveNow()
                     return nil
                 }
             }
