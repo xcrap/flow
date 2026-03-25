@@ -225,8 +225,8 @@ public final class ProjectState {
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            self.fitToScreen(viewportSize: viewportSize)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.fitToScreen(viewportSize: viewportSize)
         }
     }
 

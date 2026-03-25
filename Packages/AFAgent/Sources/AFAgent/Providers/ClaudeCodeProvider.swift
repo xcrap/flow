@@ -62,6 +62,11 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
                 do {
                     // Write image attachments to temp files for the CLI
                     let imagePaths = Self.writeAttachmentsToTemp(attachments)
+                    defer {
+                        for path in imagePaths {
+                            try? FileManager.default.removeItem(at: path)
+                        }
+                    }
 
                     try await self.runClaude(
                         prompt: prompt,
@@ -75,11 +80,6 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
                         process: process,
                         continuation: continuation
                     )
-
-                    // Clean up temp files
-                    for path in imagePaths {
-                        try? FileManager.default.removeItem(at: path)
-                    }
                 } catch {
                     if !Task.isCancelled {
                         continuation.yield(.error(error.localizedDescription))

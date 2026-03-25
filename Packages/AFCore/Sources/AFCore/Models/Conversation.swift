@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Attachment
 
-public struct Attachment: Identifiable, Sendable, Equatable {
+public struct Attachment: Identifiable, Codable, Sendable, Equatable {
     public let id: UUID
     public let data: Data
     public let mimeType: String
