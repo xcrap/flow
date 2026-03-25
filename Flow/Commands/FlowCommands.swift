@@ -52,11 +52,6 @@ struct FlowCommands: Commands {
         }
 
         CommandGroup(after: .pasteboard) {
-            Button("Select All") {
-                appState.activeProject?.selectAll()
-            }
-            .keyboardShortcut("a", modifiers: .command)
-
             Button("Duplicate Selected") {
                 duplicateSelectedNodes()
             }

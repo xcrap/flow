@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 import AFCore
 import AFAgent
 import AFCanvas
@@ -10,7 +12,7 @@ struct AgentNodePanel: View {
     let isTitleHovered: Bool
     @Bindable var conversation: ConversationState
     var onProviderChange: (String) -> Void
-    var onSend: (String) -> Void
+    var onSend: (String, [Attachment]) -> Void
     var onModelChange: (String) -> Void
     var onEffortChange: (String) -> Void
     var onCancel: () -> Void
@@ -27,6 +29,7 @@ struct AgentNodePanel: View {
     @State private var showSettings = false
     @State private var systemPromptText: String
     @State private var permissionMode: String
+    @State private var isDragTargeted = false
     @FocusState private var inputFocused: Bool
 
     private let efforts = [
@@ -42,7 +45,7 @@ struct AgentNodePanel: View {
         isTitleHovered: Bool = false,
         conversation: ConversationState,
         onProviderChange: @escaping (String) -> Void,
-        onSend: @escaping (String) -> Void,
+        onSend: @escaping (String, [Attachment]) -> Void,
         onModelChange: @escaping (String) -> Void,
         onEffortChange: @escaping (String) -> Void,
         onCancel: @escaping () -> Void,
@@ -103,7 +106,22 @@ struct AgentNodePanel: View {
                     lineWidth: isSelected ? 1.5 : 0.5
                 )
         }
+        .overlay {
+            if isDragTargeted {
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(Color.purple.opacity(0.5), lineWidth: 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Color.purple.opacity(0.06))
+                    )
+                    .allowsHitTesting(false)
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .onDrop(of: [.image, .fileURL], isTargeted: $isDragTargeted) { providers in
+            handleDroppedItems(providers)
+            return true
+        }
         .onAppear {
             restoreInputFocusIfNeeded()
         }
@@ -604,6 +622,11 @@ struct AgentNodePanel: View {
 
     private var inputBar: some View {
         VStack(spacing: 0) {
+            // Attachment thumbnails strip
+            if !conversation.pendingAttachments.isEmpty {
+                attachmentStrip
+            }
+
             TextField(conversation.isStreaming ? "Add to queue..." : "Ask for follow-up changes or attach images", text: $inputText, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
@@ -613,11 +636,27 @@ struct AgentNodePanel: View {
                 .onSubmit {
                     send()
                 }
+                .onPasteCommand(of: [.image, .png, .jpeg, .gif, .tiff, .heic]) { providers in
+                    handlePastedItems(providers)
+                }
                 .padding(.horizontal, 16)
                 .padding(.top, 14)
                 .padding(.bottom, 10)
 
             HStack(spacing: 6) {
+                // Paperclip attach button
+                Button {
+                    openFilePicker()
+                } label: {
+                    Image(systemName: "paperclip")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .frame(width: 28, height: 24)
+                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                }
+                .buttonStyle(.plain)
+                .help("Attach images")
+
                 Menu {
                     ForEach(providerOptions, id: \.id) { provider in
                         Button {
@@ -720,6 +759,106 @@ struct AgentNodePanel: View {
         )
         .padding(.horizontal, 10)
         .padding(.vertical, 10)
+    }
+
+    // MARK: - Attachment Strip
+
+    private var attachmentStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(conversation.pendingAttachments) { attachment in
+                    AttachmentThumbnail(attachment: attachment) {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            conversation.removeAttachment(attachment.id)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+        }
+    }
+
+    // MARK: - File Picker
+
+    private func openFilePicker() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.image, .png, .jpeg, .gif, .tiff, .heic, .webP, .bmp]
+        panel.message = "Select images to attach"
+
+        guard panel.runModal() == .OK else { return }
+
+        for url in panel.urls {
+            addFileAttachment(url)
+        }
+    }
+
+    private func addFileAttachment(_ url: URL) {
+        guard let data = try? Data(contentsOf: url) else { return }
+        let ext = url.pathExtension
+        let mime = Attachment.mimeType(forExtension: ext)
+        let attachment = Attachment(data: data, mimeType: mime, filename: url.lastPathComponent)
+        withAnimation(.easeOut(duration: 0.15)) {
+            conversation.addAttachment(attachment)
+        }
+    }
+
+    // MARK: - Drag & Drop
+
+    private func handleDroppedItems(_ providers: [NSItemProvider]) {
+        for provider in providers {
+            // Try file URL first
+            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
+                    guard let data = item as? Data,
+                          let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                    let ext = url.pathExtension.lowercased()
+                    let imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "tiff", "tif", "bmp"]
+                    guard imageExtensions.contains(ext) else { return }
+                    Task { @MainActor in
+                        addFileAttachment(url)
+                    }
+                }
+            }
+            // Try image data directly
+            else if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+                provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
+                    guard let data else { return }
+                    Task { @MainActor in
+                        let attachment = Attachment(data: data, mimeType: "image/png", filename: "dropped-image.png")
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            conversation.addAttachment(attachment)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Paste
+
+    private func handlePastedItems(_ providers: [NSItemProvider]) {
+        for provider in providers {
+            for type in [UTType.png, .jpeg, .gif, .tiff, .heic] {
+                if provider.hasItemConformingToTypeIdentifier(type.identifier) {
+                    provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, _ in
+                        guard let data else { return }
+                        let mime = "image/\(type.preferredFilenameExtension ?? "png")"
+                        let ext = type.preferredFilenameExtension ?? "png"
+                        Task { @MainActor in
+                            let attachment = Attachment(data: data, mimeType: mime, filename: "pasted-image.\(ext)")
+                            withAnimation(.easeOut(duration: 0.15)) {
+                                conversation.addAttachment(attachment)
+                            }
+                        }
+                    }
+                    break
+                }
+            }
+        }
     }
 
     private var settingsPopover: some View {
@@ -847,7 +986,7 @@ struct AgentNodePanel: View {
     }
 
     private var canSend: Bool {
-        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !conversation.pendingAttachments.isEmpty
     }
 
     private func restoreInputFocusIfNeeded() {
@@ -859,16 +998,20 @@ struct AgentNodePanel: View {
 
     private func send() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        let attachments = conversation.pendingAttachments
+        guard !text.isEmpty || !attachments.isEmpty else { return }
         inputText = ""
+        conversation.clearAttachments()
 
-        // Handle slash commands
-        if text.hasPrefix("/") {
-            handleSlashCommand(text)
+        let prompt = text.isEmpty ? "Analyze the attached image(s)." : text
+
+        // Handle slash commands (only if no attachments)
+        if attachments.isEmpty && prompt.hasPrefix("/") {
+            handleSlashCommand(prompt)
             return
         }
 
-        onSend(text)
+        onSend(prompt, attachments)
     }
 
     private func handleSlashCommand(_ command: String) {
@@ -901,7 +1044,7 @@ struct AgentNodePanel: View {
             }
         default:
             // Unknown command — send as regular message
-            onSend(command)
+            onSend(command, [])
         }
     }
 }
@@ -1080,9 +1223,22 @@ struct MessageRow: View {
                     .textSelection(.enabled)
             }
 
-        case .image:
-            Image(systemName: "photo")
-                .foregroundStyle(.secondary)
+        case .image(let data, _):
+            if let nsImage = NSImage(data: data) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: 280, maxHeight: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
+                    }
+            } else {
+                Label("Image", systemImage: "photo")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -1129,5 +1285,57 @@ struct MessageRow: View {
         }
 
         return segments
+    }
+}
+
+// MARK: - Attachment Thumbnail
+
+struct AttachmentThumbnail: View {
+    let attachment: Attachment
+    let onRemove: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            thumbnailContent
+                .frame(width: 64, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
+                }
+
+            Button {
+                onRemove()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, Color(red: 0.2, green: 0.2, blue: 0.22))
+            }
+            .buttonStyle(.plain)
+            .offset(x: 5, y: -5)
+        }
+        .help(attachment.filename)
+    }
+
+    @ViewBuilder
+    private var thumbnailContent: some View {
+        if attachment.isImage, let nsImage = NSImage(data: attachment.data) {
+            Image(nsImage: nsImage)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+        } else {
+            ZStack {
+                Color(nsColor: .controlBackgroundColor)
+                VStack(spacing: 4) {
+                    Image(systemName: attachment.isPDF ? "doc.fill" : "doc")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.secondary)
+                    Text(attachment.filename.components(separatedBy: ".").last?.uppercased() ?? "FILE")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
     }
 }

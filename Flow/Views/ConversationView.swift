@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import AFCore
 import AFAgent
 import AFCanvas
@@ -6,7 +7,7 @@ import AFCanvas
 struct ConversationView: View {
     @Bindable var conversationState: ConversationState
     let node: WorkflowNode
-    var onSend: (String) -> Void
+    var onSend: (String, [Attachment]) -> Void
 
     @State private var inputText = ""
     @FocusState private var inputFocused: Bool
@@ -233,7 +234,7 @@ struct ConversationView: View {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         inputText = ""
-        onSend(text)
+        onSend(text, [])
     }
 
     // MARK: - Message Grouping
@@ -342,10 +343,22 @@ struct MessageBubble: View {
                     .lineLimit(5)
             }
 
-        case .image:
-            Image(systemName: "photo")
-                .font(.title2)
-                .foregroundStyle(.secondary)
+        case .image(let data, _):
+            if let nsImage = NSImage(data: data) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: 280, maxHeight: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
+                    }
+            } else {
+                Label("Image", systemImage: "photo")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 }

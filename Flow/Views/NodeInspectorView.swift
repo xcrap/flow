@@ -6,7 +6,7 @@ import AFCanvas
 struct NodeInspectorView: View {
     @Bindable var projectState: ProjectState
     var conversations: [UUID: ConversationState]
-    var onSendMessage: (UUID, String) -> Void
+    var onSendMessage: (UUID, String, [Attachment]) -> Void
 
     private var selectedNode: WorkflowNode? {
         guard let id = projectState.selectedNodeIDs.first else { return nil }
@@ -39,8 +39,8 @@ struct NodeInspectorView: View {
             ConversationView(
                 conversationState: conversation,
                 node: node,
-                onSend: { text in
-                    onSendMessage(node.id, text)
+                onSend: { text, attachments in
+                    onSendMessage(node.id, text, attachments)
                 }
             )
         }

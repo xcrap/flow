@@ -29,6 +29,7 @@ public final class ConversationState {
     public var currentContextTokens: Int?
     public var queuedPromptCount: Int = 0
     public var queuedPromptPreviews: [String] = []
+    public var pendingAttachments: [Attachment] = []
 
     public init(nodeID: UUID) {
         self.nodeID = nodeID
@@ -42,12 +43,26 @@ public final class ConversationState {
         runtimePhase.statusLabel
     }
 
-    public func appendUserMessage(_ text: String) {
-        let message = ConversationMessage(
-            role: .user,
-            content: [.text(text)]
-        )
+    public func appendUserMessage(_ text: String, attachments: [Attachment] = []) {
+        var content: [MessageContent] = []
+        for attachment in attachments where attachment.isImage {
+            content.append(.image(data: attachment.data, mimeType: attachment.mimeType))
+        }
+        content.append(.text(text))
+        let message = ConversationMessage(role: .user, content: content)
         messages.append(message)
+    }
+
+    public func addAttachment(_ attachment: Attachment) {
+        pendingAttachments.append(attachment)
+    }
+
+    public func removeAttachment(_ id: UUID) {
+        pendingAttachments.removeAll { $0.id == id }
+    }
+
+    public func clearAttachments() {
+        pendingAttachments.removeAll()
     }
 
     public func recordRuntimeActivity(
@@ -290,6 +305,7 @@ public final class ConversationState {
         currentContextTokens = nil
         queuedPromptCount = 0
         queuedPromptPreviews.removeAll()
+        pendingAttachments.removeAll()
         runtimeActivities.removeAll()
     }
 
@@ -337,7 +353,17 @@ public final class ConversationState {
     }
 
     public var recentRuntimeActivities: [ConversationRuntimeActivity] {
-        Array(runtimeActivities.suffix(4))
+        // Dedup: for repeating kinds (e.g. multiple "Session ready"), keep only the latest
+        var seen = Set<ConversationRuntimeActivityKind>()
+        var deduped: [ConversationRuntimeActivity] = []
+        for activity in runtimeActivities.suffix(8).reversed() {
+            if activity.kind == .session || activity.kind == .contextCompaction {
+                // For session/compaction, keep only the most recent occurrence
+                guard seen.insert(activity.kind).inserted else { continue }
+            }
+            deduped.append(activity)
+        }
+        return Array(deduped.reversed().suffix(4))
     }
 }
 

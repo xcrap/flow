@@ -278,8 +278,8 @@ struct ProjectEditorView: View {
                         }
                         project.onChange?()
                     },
-                    onSend: { text in
-                        sendMessage(text, toNode: node.id, in: project)
+                    onSend: { text, attachments in
+                        sendMessage(text, attachments: attachments, toNode: node.id, in: project)
                     },
                     onModelChange: { model in
                         project.nodes[node.id]?.configuration.modelID = model
@@ -376,7 +376,7 @@ struct ProjectEditorView: View {
 
     // MARK: - Send Message
 
-    private func sendMessage(_ text: String, toNode nodeID: UUID, in project: ProjectState) {
+    private func sendMessage(_ text: String, attachments: [Attachment] = [], toNode nodeID: UUID, in project: ProjectState) {
         guard let node = project.nodes[nodeID],
               node.kind == .agent,
               let service = conversationService
@@ -397,6 +397,7 @@ struct ProjectEditorView: View {
 
         service.send(
             prompt: text,
+            attachments: attachments,
             to: conversation,
             providerID: providerID,
             model: model,

@@ -66,6 +66,7 @@ public protocol AIProvider: Sendable {
 
     func sendMessage(
         prompt: String,
+        attachments: [Attachment],
         messages: [ConversationMessage],
         model: String,
         effort: String?,

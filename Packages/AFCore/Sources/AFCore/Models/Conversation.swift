@@ -1,5 +1,66 @@
 import Foundation
 
+// MARK: - Attachment
+
+public struct Attachment: Identifiable, Sendable, Equatable {
+    public let id: UUID
+    public let data: Data
+    public let mimeType: String
+    public let filename: String
+
+    public init(id: UUID = UUID(), data: Data, mimeType: String, filename: String) {
+        self.id = id
+        self.data = data
+        self.mimeType = mimeType
+        self.filename = filename
+    }
+
+    public var isImage: Bool {
+        mimeType.hasPrefix("image/")
+    }
+
+    public var isPDF: Bool {
+        mimeType == "application/pdf"
+    }
+
+    public static let supportedImageTypes: Set<String> = [
+        "public.jpeg", "public.png", "public.gif", "public.webp",
+        "public.heic", "public.heif", "public.tiff", "public.bmp",
+    ]
+
+    public static let supportedTypes: Set<String> = supportedImageTypes.union([
+        "com.adobe.pdf",
+    ])
+
+    public static func mimeType(for utType: String) -> String {
+        switch utType {
+        case "public.jpeg": "image/jpeg"
+        case "public.png": "image/png"
+        case "public.gif": "image/gif"
+        case "public.webp": "image/webp"
+        case "public.heic", "public.heif": "image/heic"
+        case "public.tiff": "image/tiff"
+        case "public.bmp": "image/bmp"
+        case "com.adobe.pdf": "application/pdf"
+        default: "application/octet-stream"
+        }
+    }
+
+    public static func mimeType(forExtension ext: String) -> String {
+        switch ext.lowercased() {
+        case "jpg", "jpeg": "image/jpeg"
+        case "png": "image/png"
+        case "gif": "image/gif"
+        case "webp": "image/webp"
+        case "heic", "heif": "image/heic"
+        case "tiff", "tif": "image/tiff"
+        case "bmp": "image/bmp"
+        case "pdf": "application/pdf"
+        default: "application/octet-stream"
+        }
+    }
+}
+
 // MARK: - Message Role
 
 public enum MessageRole: String, Codable, Sendable {

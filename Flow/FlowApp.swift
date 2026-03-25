@@ -30,10 +30,6 @@ struct FlowApp: App {
                     }
                     return nil
 
-                case "a":
-                    appState.activeProject?.selectAll()
-                    return nil
-
                 case "0":
                     if let project = appState.activeProject {
                         withAnimation(.easeOut(duration: 0.2)) {

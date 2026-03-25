@@ -46,6 +46,7 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
 
     public func sendMessage(
         prompt: String,
+        attachments: [Attachment],
         messages: [ConversationMessage],
         model: String,
         effort: String?,
@@ -59,8 +60,12 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         let stream = AsyncThrowingStream<StreamEvent, Error> { continuation in
             let task = Task {
                 do {
+                    // Write image attachments to temp files for the CLI
+                    let imagePaths = Self.writeAttachmentsToTemp(attachments)
+
                     try await self.runClaude(
                         prompt: prompt,
+                        imagePaths: imagePaths,
                         model: model,
                         effort: effort,
                         systemPrompt: systemPrompt,
@@ -70,6 +75,11 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
                         process: process,
                         continuation: continuation
                     )
+
+                    // Clean up temp files
+                    for path in imagePaths {
+                        try? FileManager.default.removeItem(at: path)
+                    }
                 } catch {
                     if !Task.isCancelled {
                         continuation.yield(.error(error.localizedDescription))
@@ -87,6 +97,23 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         return ProviderStreamHandle(stream: stream) {
             Self.forceKill(process)
         }
+    }
+
+    private static func writeAttachmentsToTemp(_ attachments: [Attachment]) -> [URL] {
+        let fm = FileManager.default
+        let tempDir = fm.temporaryDirectory.appendingPathComponent("flow-attachments", isDirectory: true)
+        try? fm.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        var paths: [URL] = []
+        for attachment in attachments where attachment.isImage {
+            let ext = attachment.mimeType.components(separatedBy: "/").last ?? "png"
+            let filename = "\(attachment.id.uuidString).\(ext)"
+            let url = tempDir.appendingPathComponent(filename)
+            if fm.createFile(atPath: url.path, contents: attachment.data) {
+                paths.append(url)
+            }
+        }
+        return paths
     }
 
     private static func forceKill(_ process: Process) {
@@ -153,6 +180,7 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
 
     private func runClaude(
         prompt: String,
+        imagePaths: [URL] = [],
         model: String,
         effort: String?,
         systemPrompt: String?,
@@ -175,7 +203,8 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
                 systemPrompt: systemPrompt,
                 permissionMode: permissionMode,
                 prompt: prompt,
-                resumeSessionID: resumeSessionID
+                resumeSessionID: resumeSessionID,
+                imagePaths: imagePaths
             )
             process.arguments = args
         } else {
@@ -186,7 +215,8 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
                 systemPrompt: systemPrompt,
                 permissionMode: permissionMode,
                 prompt: prompt,
-                resumeSessionID: resumeSessionID
+                resumeSessionID: resumeSessionID,
+                imagePaths: imagePaths
             )
         }
 
@@ -276,7 +306,8 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         systemPrompt: String?,
         permissionMode: String?,
         prompt: String,
-        resumeSessionID: String?
+        resumeSessionID: String?,
+        imagePaths: [URL] = []
     ) -> [String] {
         var args = [
             "-p",
@@ -302,6 +333,11 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
 
         if let resumeSessionID, !resumeSessionID.isEmpty {
             args += ["--resume", resumeSessionID]
+        }
+
+        // Attach images via --images flag
+        for imagePath in imagePaths {
+            args += ["--images", imagePath.path]
         }
 
         args.append(prompt)

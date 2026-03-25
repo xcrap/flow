@@ -64,6 +64,7 @@ private actor CodexSession {
 
     func startTurn(
         prompt: String,
+        attachments: [Attachment] = [],
         model: String,
         effort: String?,
         workingDirectory: URL?,
@@ -89,9 +90,21 @@ private actor CodexSession {
         let requestID = nextRequestID()
         lastTurnStartRequestID = requestID
 
+        // Build input array with image attachments followed by text
+        var input: [[String: Any]] = []
+        for attachment in attachments where attachment.isImage {
+            let base64 = attachment.data.base64EncodedString()
+            let dataURL = "data:\(attachment.mimeType);base64,\(base64)"
+            input.append([
+                "type": "image_url",
+                "image_url": ["url": dataURL],
+            ])
+        }
+        input.append(["type": "text", "text": prompt])
+
         var params: [String: Any] = [
             "threadId": resolvedThreadID,
-            "input": [["type": "text", "text": prompt]],
+            "input": input,
             "model": model,
         ]
 
@@ -614,6 +627,7 @@ public final class CodexProvider: AIProvider, Sendable {
 
     public func sendMessage(
         prompt: String,
+        attachments: [Attachment],
         messages: [ConversationMessage],
         model: String,
         effort: String?,
@@ -635,6 +649,7 @@ public final class CodexProvider: AIProvider, Sendable {
                     await reference.set(session)
                     let threadID = try await session.startTurn(
                         prompt: prompt,
+                        attachments: attachments,
                         model: model,
                         effort: effort,
                         workingDirectory: workingDirectory,

@@ -5,6 +5,7 @@ import AFCore
 public final class ConversationService {
     private struct PendingRequest {
         let prompt: String
+        let attachments: [Attachment]
         let providerID: String
         let model: String
         let effort: String?
@@ -32,6 +33,7 @@ public final class ConversationService {
 
     public func send(
         prompt: String,
+        attachments: [Attachment] = [],
         to conversationState: ConversationState,
         providerID: String,
         model: String,
@@ -46,6 +48,7 @@ public final class ConversationService {
 
         let request = PendingRequest(
             prompt: prompt,
+            attachments: attachments,
             providerID: providerID,
             model: model,
             effort: effort,
@@ -63,7 +66,7 @@ public final class ConversationService {
             return
         }
 
-        conversationState.appendUserMessage(prompt)
+        conversationState.appendUserMessage(prompt, attachments: attachments)
         start(request, for: conversationState)
     }
 
@@ -93,7 +96,7 @@ public final class ConversationService {
     private func start(_ request: PendingRequest, for conversationState: ConversationState) {
         if request.queued {
             conversationState.beginQueuedPrompt()
-            conversationState.appendUserMessage(request.prompt)
+            conversationState.appendUserMessage(request.prompt, attachments: request.attachments)
         }
 
         conversationState.startStreaming(
@@ -124,6 +127,7 @@ public final class ConversationService {
 
         let handle = provider.sendMessage(
             prompt: request.prompt,
+            attachments: request.attachments,
             messages: conversationState.messages,
             model: request.model,
             effort: request.effort,
