@@ -998,12 +998,31 @@ struct AgentNodePanel: View {
 
     private func send() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let attachments = conversation.pendingAttachments
+        var attachments = conversation.pendingAttachments
         guard !text.isEmpty || !attachments.isEmpty else { return }
         inputText = ""
         conversation.clearAttachments()
 
-        let prompt = text.isEmpty ? "Analyze the attached image(s)." : text
+        // Detect image file paths in the text and convert to attachments
+        var promptLines: [String] = []
+        for line in text.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let attachment = Self.attachmentFromFilePath(trimmed) {
+                attachments.append(attachment)
+            } else {
+                promptLines.append(line)
+            }
+        }
+
+        let prompt: String
+        let remainingText = promptLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        if remainingText.isEmpty && !attachments.isEmpty {
+            prompt = "Analyze the attached image(s)."
+        } else if remainingText.isEmpty {
+            return
+        } else {
+            prompt = remainingText
+        }
 
         // Handle slash commands (only if no attachments)
         if attachments.isEmpty && prompt.hasPrefix("/") {
@@ -1012,6 +1031,22 @@ struct AgentNodePanel: View {
         }
 
         onSend(prompt, attachments)
+    }
+
+    private static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "tiff", "tif", "bmp"]
+
+    private static func attachmentFromFilePath(_ path: String) -> Attachment? {
+        let cleaned = path.replacingOccurrences(of: "file://", with: "")
+        guard cleaned.hasPrefix("/") || cleaned.hasPrefix("~") else { return nil }
+        let expanded = cleaned.hasPrefix("~")
+            ? NSString(string: cleaned).expandingTildeInPath
+            : cleaned
+        let ext = (expanded as NSString).pathExtension.lowercased()
+        guard imageExtensions.contains(ext) else { return nil }
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: expanded)) else { return nil }
+        let mime = Attachment.mimeType(forExtension: ext)
+        let filename = (expanded as NSString).lastPathComponent
+        return Attachment(data: data, mimeType: mime, filename: filename)
     }
 
     private func handleSlashCommand(_ command: String) {

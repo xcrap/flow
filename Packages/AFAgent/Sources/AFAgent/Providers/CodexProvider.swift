@@ -92,12 +92,11 @@ private actor CodexSession {
 
         // Build input array with image attachments followed by text
         var input: [[String: Any]] = []
-        for attachment in attachments where attachment.isImage {
-            let base64 = attachment.data.base64EncodedString()
-            let dataURL = "data:\(attachment.mimeType);base64,\(base64)"
+        let imagePaths = Self.writeAttachmentsToTemp(attachments)
+        for path in imagePaths {
             input.append([
-                "type": "image_url",
-                "image_url": ["url": dataURL],
+                "type": "localImage",
+                "path": path.path,
             ])
         }
         input.append(["type": "text", "text": prompt])
@@ -585,6 +584,23 @@ private actor CodexSession {
         {
             writer.write(Data((string + "\n").utf8))
         }
+    }
+
+    private static func writeAttachmentsToTemp(_ attachments: [Attachment]) -> [URL] {
+        let fm = FileManager.default
+        let tempDir = fm.temporaryDirectory.appendingPathComponent("flow-attachments", isDirectory: true)
+        try? fm.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        var paths: [URL] = []
+        for attachment in attachments where attachment.isImage {
+            let ext = attachment.mimeType.components(separatedBy: "/").last ?? "png"
+            let filename = "\(attachment.id.uuidString).\(ext)"
+            let url = tempDir.appendingPathComponent(filename)
+            if fm.createFile(atPath: url.path, contents: attachment.data) {
+                paths.append(url)
+            }
+        }
+        return paths
     }
 
     private static func findCodex() -> URL {

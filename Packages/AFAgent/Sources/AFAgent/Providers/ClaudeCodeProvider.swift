@@ -335,12 +335,14 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
             args += ["--resume", resumeSessionID]
         }
 
-        // Attach images via --images flag
+        // Build prompt with image references so Claude Code can read them
+        var fullPrompt = ""
         for imagePath in imagePaths {
-            args += ["--images", imagePath.path]
+            fullPrompt += "[Image: \(imagePath.path)]\n"
         }
+        fullPrompt += prompt
 
-        args.append(prompt)
+        args.append(fullPrompt)
         return args
     }
 
