@@ -2,7 +2,7 @@
 
 A native macOS app for orchestrating AI agents and terminals on an infinite canvas. Built with Swift 6 and SwiftUI for macOS 26 (Tahoe).
 
-![Flow](https://img.shields.io/badge/macOS-26+-blue) ![Swift](https://img.shields.io/badge/Swift-6-orange) ![Tests](https://img.shields.io/badge/tests-187%20passing-green)
+![Flow](https://img.shields.io/badge/macOS-26+-blue) ![Swift](https://img.shields.io/badge/Swift-6-orange) ![Tests](https://img.shields.io/badge/tests-205%20passing-green)
 
 ![screenshot](screenshot.png)
 
@@ -13,7 +13,7 @@ A native macOS app for orchestrating AI agents and terminals on an infinite canv
 - **Codex (OpenAI) Integration** — GPT-5.4 via Codex app-server. Persistent threads, full context.
 - **Terminal Nodes** — Real shell sessions on the canvas. Run commands, see output.
 - **Folder-Based Projects** — Each project maps to a directory. Agents and terminals operate in that folder.
-- **Full Persistence** — Projects, nodes, conversations, terminal history, canvas state all survive restarts.
+- **Full Persistence** — Projects, nodes, conversations, and canvas state all survive restarts.
 - **Command Palette** — Cmd+K for quick actions.
 - **Git Integration** — Branch display, commit, push from toolbar.
 - **Code Blocks** — Syntax-highlighted code with copy button.

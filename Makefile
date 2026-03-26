@@ -22,6 +22,9 @@ test:
 	cd Packages/AFCore && swift test --quiet
 	cd Packages/AFCanvas && swift test --quiet
 	cd Packages/AFAgent && swift test --quiet
+	cd Packages/AFTerminal && swift test --quiet
+	cd Packages/AFPersistence && swift test --quiet
+	cd Packages/AFDiff && swift test --quiet
 	@echo "All tests passed."
 
 clean:

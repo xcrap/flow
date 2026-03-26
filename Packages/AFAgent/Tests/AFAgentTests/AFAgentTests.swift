@@ -573,6 +573,7 @@ private final class MockProvider: AIProvider, @unchecked Sendable {
 
     func sendMessage(
         prompt: String,
+        attachments: [Attachment],
         messages: [ConversationMessage],
         model: String,
         effort: String?,
