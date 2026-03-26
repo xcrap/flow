@@ -267,7 +267,9 @@ public final class ProjectState {
         case .agent:
             let provider = UserDefaults.standard.string(forKey: "defaultProvider") ?? "claude"
             let model = UserDefaults.standard.string(forKey: "defaultModel") ?? "sonnet"
-            return NodeConfiguration(providerID: provider, modelID: model, triggerType: "auto")
+            let accessStr = UserDefaults.standard.string(forKey: "defaultAccess") ?? "fullAccess"
+            let access = AgentAccess(rawValue: accessStr) ?? .fullAccess
+            return NodeConfiguration(providerID: provider, modelID: model, agentMode: .auto, agentAccess: access)
         case .terminal:
             return NodeConfiguration(language: "bash")
         }

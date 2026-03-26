@@ -578,7 +578,8 @@ private final class MockProvider: AIProvider, @unchecked Sendable {
         model: String,
         effort: String?,
         systemPrompt: String?,
-        permissionMode: String?,
+        agentMode: AgentMode?,
+        agentAccess: AgentAccess?,
         workingDirectory: URL?,
         resumeSessionID: String?
     ) -> ProviderStreamHandle {
@@ -988,5 +989,95 @@ final class ClaudeCodeProviderTests: XCTestCase {
         XCTAssertNotNil(sonnet)
         XCTAssertEqual(opus?.contextWindow, 200_000)
         XCTAssertEqual(sonnet?.contextWindow, 200_000)
+    }
+}
+
+// MARK: - ClaudeCodeProvider.buildArgs Tests
+
+final class ClaudeBuildArgsTests: XCTestCase {
+
+    private func buildArgs(mode: AgentMode? = nil, access: AgentAccess? = nil) -> [String] {
+        ClaudeCodeProvider.buildArgs(
+            model: "sonnet",
+            effort: nil,
+            systemPrompt: nil,
+            agentMode: mode,
+            agentAccess: access,
+            prompt: "hello",
+            resumeSessionID: nil
+        )
+    }
+
+    func testAutoFullAccessUsesSkipPermissions() {
+        let args = buildArgs(mode: .auto, access: .fullAccess)
+        XCTAssertTrue(args.contains("--dangerously-skip-permissions"))
+        XCTAssertFalse(args.contains("--permission-mode"))
+    }
+
+    func testAutoSupervisedUsesPermissionModeDefault() {
+        let args = buildArgs(mode: .auto, access: .supervised)
+        XCTAssertFalse(args.contains("--dangerously-skip-permissions"))
+        XCTAssertTrue(args.contains("--permission-mode"))
+        if let idx = args.firstIndex(of: "--permission-mode") {
+            XCTAssertEqual(args[args.index(after: idx)], "default")
+        }
+    }
+
+    func testAutoAcceptEditsUsesPermissionModeAcceptEdits() {
+        let args = buildArgs(mode: .auto, access: .acceptEdits)
+        XCTAssertFalse(args.contains("--dangerously-skip-permissions"))
+        if let idx = args.firstIndex(of: "--permission-mode") {
+            XCTAssertEqual(args[args.index(after: idx)], "acceptEdits")
+        } else {
+            XCTFail("Expected --permission-mode")
+        }
+    }
+
+    func testPlanModeUsesPermissionModePlan() {
+        let args = buildArgs(mode: .plan, access: .fullAccess)
+        XCTAssertFalse(args.contains("--dangerously-skip-permissions"))
+        if let idx = args.firstIndex(of: "--permission-mode") {
+            XCTAssertEqual(args[args.index(after: idx)], "plan")
+        } else {
+            XCTFail("Expected --permission-mode plan")
+        }
+    }
+
+    func testPlanSupervisedStillUsesPlanMode() {
+        let args = buildArgs(mode: .plan, access: .supervised)
+        if let idx = args.firstIndex(of: "--permission-mode") {
+            XCTAssertEqual(args[args.index(after: idx)], "plan")
+        } else {
+            XCTFail("Expected --permission-mode plan")
+        }
+    }
+
+    func testNilDefaultsToFullAccess() {
+        let args = buildArgs(mode: nil, access: nil)
+        XCTAssertTrue(args.contains("--dangerously-skip-permissions"))
+        XCTAssertFalse(args.contains("--permission-mode"))
+    }
+}
+
+// MARK: - CodexProvider.codexParams Tests
+
+final class CodexParamsTests: XCTestCase {
+
+    func testSupervisedParams() {
+        let params = CodexProvider.codexParams(for: .supervised)
+        XCTAssertEqual(params.approvalPolicy, "untrusted")
+        XCTAssertEqual(params.sandbox, "workspace-write")
+    }
+
+    func testAcceptEditsParams() {
+        let params = CodexProvider.codexParams(for: .acceptEdits)
+        XCTAssertEqual(params.approvalPolicy, "on-request")
+        XCTAssertEqual(params.sandbox, "workspace-write")
+    }
+
+    func testFullAccessParams() {
+        let params = CodexProvider.codexParams(for: .fullAccess)
+        XCTAssertEqual(params.approvalPolicy, "never")
+        XCTAssertEqual(params.sandbox, "danger-full-access")
     }
 }

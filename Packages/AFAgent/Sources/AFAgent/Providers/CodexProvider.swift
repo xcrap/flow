@@ -8,6 +8,8 @@ private actor CodexSessionStore {
         for threadID: String?,
         workingDirectory: URL?,
         systemPrompt: String?,
+        agentMode: AgentMode?,
+        agentAccess: AgentAccess?,
         discovery: RuntimeDiscovery
     ) -> CodexSession {
         if let threadID, let existing = sessions[threadID] {
@@ -18,6 +20,8 @@ private actor CodexSessionStore {
             resumeThreadID: threadID,
             workingDirectory: workingDirectory,
             systemPrompt: systemPrompt,
+            agentMode: agentMode,
+            agentAccess: agentAccess,
             discovery: discovery
         )
 
@@ -38,6 +42,8 @@ private actor CodexSession {
     private var workingDirectory: URL?
     private var developerInstructions: String?
     private let discovery: RuntimeDiscovery
+    private let approvalPolicy: String
+    private let sandboxMode: String
 
     private var process: Process?
     private var writer: FileHandle?
@@ -58,13 +64,30 @@ private actor CodexSession {
         resumeThreadID: String?,
         workingDirectory: URL?,
         systemPrompt: String?,
+        agentMode: AgentMode?,
+        agentAccess: AgentAccess?,
         discovery: RuntimeDiscovery
     ) {
         initialResumeThreadID = resumeThreadID
         threadID = resumeThreadID
         self.workingDirectory = workingDirectory
-        developerInstructions = systemPrompt
         self.discovery = discovery
+
+        let params = CodexProvider.codexParams(for: agentAccess ?? .fullAccess)
+        approvalPolicy = params.approvalPolicy
+        sandboxMode = params.sandbox
+
+        // Plan mode for Codex: prepend instruction (no native flag)
+        var instructions = systemPrompt
+        if (agentMode ?? .auto) == .plan {
+            let planPrefix = "Before executing any actions, first create a detailed plan and present it for review. Do not execute commands or make changes until the plan is approved."
+            if let existing = instructions, !existing.isEmpty {
+                instructions = planPrefix + "\n\n" + existing
+            } else {
+                instructions = planPrefix
+            }
+        }
+        developerInstructions = instructions
     }
 
     func startTurn(
@@ -533,8 +556,8 @@ private actor CodexSession {
         if let threadToResume {
             var params: [String: Any] = [
                 "threadId": threadToResume,
-                "approvalPolicy": "never",
-                "sandbox": "danger-full-access",
+                "approvalPolicy": approvalPolicy,
+                "sandbox": sandboxMode,
             ]
 
             if let developerInstructions, !developerInstructions.isEmpty {
@@ -550,8 +573,8 @@ private actor CodexSession {
         }
 
         var params: [String: Any] = [
-            "approvalPolicy": "never",
-            "sandbox": "danger-full-access",
+            "approvalPolicy": approvalPolicy,
+            "sandbox": sandboxMode,
         ]
 
         if let developerInstructions, !developerInstructions.isEmpty {
@@ -643,6 +666,17 @@ public final class CodexProvider: AIProvider, Sendable {
         self.discovery = discovery
     }
 
+    static func codexParams(for access: AgentAccess) -> (approvalPolicy: String, sandbox: String) {
+        switch access {
+        case .supervised:
+            return ("untrusted", "workspace-write")
+        case .acceptEdits:
+            return ("on-request", "workspace-write")
+        case .fullAccess:
+            return ("never", "danger-full-access")
+        }
+    }
+
     public func sendMessage(
         prompt: String,
         attachments: [Attachment],
@@ -650,7 +684,8 @@ public final class CodexProvider: AIProvider, Sendable {
         model: String,
         effort: String?,
         systemPrompt: String?,
-        permissionMode: String?,
+        agentMode: AgentMode?,
+        agentAccess: AgentAccess?,
         workingDirectory: URL?,
         resumeSessionID: String?
     ) -> ProviderStreamHandle {
@@ -663,6 +698,8 @@ public final class CodexProvider: AIProvider, Sendable {
                         for: resumeSessionID,
                         workingDirectory: workingDirectory,
                         systemPrompt: systemPrompt,
+                        agentMode: agentMode,
+                        agentAccess: agentAccess,
                         discovery: discovery
                     )
                     await reference.set(session)

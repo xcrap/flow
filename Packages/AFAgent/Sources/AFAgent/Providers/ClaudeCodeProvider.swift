@@ -55,7 +55,8 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         model: String,
         effort: String?,
         systemPrompt: String?,
-        permissionMode: String?,
+        agentMode: AgentMode?,
+        agentAccess: AgentAccess?,
         workingDirectory: URL?,
         resumeSessionID: String?
     ) -> ProviderStreamHandle {
@@ -78,7 +79,8 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
                         model: model,
                         effort: effort,
                         systemPrompt: systemPrompt,
-                        permissionMode: permissionMode,
+                        agentMode: agentMode,
+                        agentAccess: agentAccess,
                         workingDirectory: workingDirectory,
                         resumeSessionID: resumeSessionID,
                         process: process,
@@ -143,7 +145,8 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         model: String,
         effort: String?,
         systemPrompt: String?,
-        permissionMode: String?,
+        agentMode: AgentMode?,
+        agentAccess: AgentAccess?,
         workingDirectory: URL?,
         resumeSessionID: String?,
         process: Process,
@@ -164,7 +167,8 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
             model: model,
             effort: effort,
             systemPrompt: systemPrompt,
-            permissionMode: permissionMode,
+            agentMode: agentMode,
+            agentAccess: agentAccess,
             prompt: prompt,
             resumeSessionID: resumeSessionID,
             imagePaths: imagePaths
@@ -250,11 +254,12 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         }
     }
 
-    private static func buildArgs(
+    static func buildArgs(
         model: String,
         effort: String?,
         systemPrompt: String?,
-        permissionMode: String?,
+        agentMode: AgentMode?,
+        agentAccess: AgentAccess?,
         prompt: String,
         resumeSessionID: String?,
         imagePaths: [URL] = []
@@ -275,11 +280,23 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
             args += ["--system-prompt", systemPrompt]
         }
 
-        if let permissionMode, !permissionMode.isEmpty {
-            args += ["--permission-mode", permissionMode]
-        }
+        let resolvedMode = agentMode ?? .auto
+        let resolvedAccess = agentAccess ?? .fullAccess
 
-        args += ["--dangerously-skip-permissions"]
+        if resolvedMode == .plan {
+            // Plan mode always uses --permission-mode plan (gates execution)
+            args += ["--permission-mode", "plan"]
+        } else {
+            // Auto mode: access level determines the flags
+            switch resolvedAccess {
+            case .fullAccess:
+                args += ["--dangerously-skip-permissions"]
+            case .acceptEdits:
+                args += ["--permission-mode", "acceptEdits"]
+            case .supervised:
+                args += ["--permission-mode", "default"]
+            }
+        }
 
         if let resumeSessionID, !resumeSessionID.isEmpty {
             args += ["--resume", resumeSessionID]

@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Environment(RuntimeHealthMonitor.self) private var healthMonitor
     @AppStorage("defaultProvider") private var defaultProvider = "claude"
     @AppStorage("defaultModel") private var defaultModel = "sonnet"
+    @AppStorage("defaultAccess") private var defaultAccess = "fullAccess"
     @AppStorage("gridVisible") private var gridVisible = true
 
     private var modelsForProvider: [(id: String, name: String)] {
@@ -87,6 +88,16 @@ struct SettingsView: View {
                                 ForEach(modelsForProvider, id: \.id) { model in
                                     Text(model.name).tag(model.id)
                                 }
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+                        }
+
+                        settingsRow("Default Access") {
+                            Picker("", selection: $defaultAccess) {
+                                Text("Supervised").tag("supervised")
+                                Text("Accept Edits").tag("acceptEdits")
+                                Text("Full access").tag("fullAccess")
                             }
                             .labelsHidden()
                             .fixedSize()

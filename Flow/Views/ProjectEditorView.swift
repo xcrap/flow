@@ -327,8 +327,12 @@ struct ProjectEditorView: View {
                         }
                         project.onChange?()
                     },
-                    onPermissionModeChange: { mode in
-                        project.nodes[node.id]?.configuration.triggerType = mode
+                    onModeChange: { mode in
+                        project.nodes[node.id]?.configuration.agentMode = mode
+                        project.onChange?()
+                    },
+                    onAccessChange: { access in
+                        project.nodes[node.id]?.configuration.agentAccess = access
                         project.onChange?()
                     },
                     onRemoveQueuedPrompt: { index in
@@ -412,7 +416,8 @@ struct ProjectEditorView: View {
         let model = node.configuration.modelID ?? "sonnet"
         let effort = node.configuration.effort ?? "high"
         let systemPrompt = node.configuration.systemPrompt
-        let permMode = node.configuration.triggerType ?? "auto"
+        let mode = node.configuration.resolvedMode
+        let access = node.configuration.resolvedAccess
 
         let workingDir = URL(fileURLWithPath: project.project.rootPath)
 
@@ -427,7 +432,8 @@ struct ProjectEditorView: View {
             model: model,
             effort: effort,
             systemPrompt: systemPrompt,
-            permissionMode: permMode,
+            agentMode: mode,
+            agentAccess: access,
             workingDirectory: workingDir,
             resumeSessionID: sessionID,
             onComplete: { [projectID] in

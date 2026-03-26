@@ -42,6 +42,19 @@ public enum NodeExecutionState: String, Codable, Sendable {
     case waitingForApproval
 }
 
+// MARK: - Agent Mode & Access
+
+public enum AgentMode: String, Codable, Sendable, CaseIterable {
+    case auto
+    case plan
+}
+
+public enum AgentAccess: String, Codable, Sendable, CaseIterable {
+    case supervised
+    case acceptEdits
+    case fullAccess
+}
+
 // MARK: - Node Configuration
 
 public struct NodeConfiguration: Codable, Sendable, Equatable {
@@ -59,6 +72,21 @@ public struct NodeConfiguration: Codable, Sendable, Equatable {
     public var transformExpression: String?
     public var toolName: String?
     public var toolParameters: [String: String]?
+    public var agentMode: AgentMode?
+    public var agentAccess: AgentAccess?
+
+    public var resolvedMode: AgentMode {
+        agentMode ?? .auto
+    }
+
+    public var resolvedAccess: AgentAccess {
+        if let agentAccess { return agentAccess }
+        if let raw = UserDefaults.standard.string(forKey: "defaultAccess"),
+           let access = AgentAccess(rawValue: raw) {
+            return access
+        }
+        return .fullAccess
+    }
 
     public init(
         providerID: String? = nil,
@@ -74,7 +102,9 @@ public struct NodeConfiguration: Codable, Sendable, Equatable {
         cronExpression: String? = nil,
         transformExpression: String? = nil,
         toolName: String? = nil,
-        toolParameters: [String: String]? = nil
+        toolParameters: [String: String]? = nil,
+        agentMode: AgentMode? = nil,
+        agentAccess: AgentAccess? = nil
     ) {
         self.providerID = providerID
         self.modelID = modelID
@@ -90,6 +120,91 @@ public struct NodeConfiguration: Codable, Sendable, Equatable {
         self.transformExpression = transformExpression
         self.toolName = toolName
         self.toolParameters = toolParameters
+        self.agentMode = agentMode
+        self.agentAccess = agentAccess
+    }
+
+    // MARK: - Backward Compatible Decoding
+
+    private enum CodingKeys: String, CodingKey {
+        case providerID, modelID, effort, systemPrompt, temperature, maxTokens
+        case language, script, conditionExpression, triggerType, cronExpression
+        case transformExpression, toolName, toolParameters
+        case agentMode, agentAccess
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        providerID = try c.decodeIfPresent(String.self, forKey: .providerID)
+        modelID = try c.decodeIfPresent(String.self, forKey: .modelID)
+        effort = try c.decodeIfPresent(String.self, forKey: .effort)
+        systemPrompt = try c.decodeIfPresent(String.self, forKey: .systemPrompt)
+        temperature = try c.decodeIfPresent(Double.self, forKey: .temperature)
+        maxTokens = try c.decodeIfPresent(Int.self, forKey: .maxTokens)
+        language = try c.decodeIfPresent(String.self, forKey: .language)
+        script = try c.decodeIfPresent(String.self, forKey: .script)
+        conditionExpression = try c.decodeIfPresent(String.self, forKey: .conditionExpression)
+        triggerType = try c.decodeIfPresent(String.self, forKey: .triggerType)
+        cronExpression = try c.decodeIfPresent(String.self, forKey: .cronExpression)
+        transformExpression = try c.decodeIfPresent(String.self, forKey: .transformExpression)
+        toolName = try c.decodeIfPresent(String.self, forKey: .toolName)
+        toolParameters = try c.decodeIfPresent([String: String].self, forKey: .toolParameters)
+
+        agentMode = try c.decodeIfPresent(AgentMode.self, forKey: .agentMode)
+        agentAccess = try c.decodeIfPresent(AgentAccess.self, forKey: .agentAccess)
+
+        // Migrate from legacy triggerType when new fields are absent
+        if agentMode == nil, agentAccess == nil, let legacy = triggerType {
+            switch legacy {
+            case "plan":
+                agentMode = .plan
+                agentAccess = .fullAccess
+            case "acceptEdits":
+                agentMode = .auto
+                agentAccess = .acceptEdits
+            case "bypassPermissions":
+                agentMode = .auto
+                agentAccess = .fullAccess
+            case "default":
+                agentMode = .auto
+                agentAccess = .supervised
+            default: // "auto" or anything else
+                agentMode = .auto
+                agentAccess = .fullAccess
+            }
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(providerID, forKey: .providerID)
+        try c.encodeIfPresent(modelID, forKey: .modelID)
+        try c.encodeIfPresent(effort, forKey: .effort)
+        try c.encodeIfPresent(systemPrompt, forKey: .systemPrompt)
+        try c.encodeIfPresent(temperature, forKey: .temperature)
+        try c.encodeIfPresent(maxTokens, forKey: .maxTokens)
+        try c.encodeIfPresent(language, forKey: .language)
+        try c.encodeIfPresent(script, forKey: .script)
+        try c.encodeIfPresent(conditionExpression, forKey: .conditionExpression)
+        try c.encodeIfPresent(cronExpression, forKey: .cronExpression)
+        try c.encodeIfPresent(transformExpression, forKey: .transformExpression)
+        try c.encodeIfPresent(toolName, forKey: .toolName)
+        try c.encodeIfPresent(toolParameters, forKey: .toolParameters)
+        try c.encodeIfPresent(agentMode, forKey: .agentMode)
+        try c.encodeIfPresent(agentAccess, forKey: .agentAccess)
+
+        // Write legacy triggerType for backward compat
+        let legacy: String? = {
+            let mode = resolvedMode
+            let access = resolvedAccess
+            if mode == .plan { return "plan" }
+            switch access {
+            case .supervised: return "default"
+            case .acceptEdits: return "acceptEdits"
+            case .fullAccess: return "bypassPermissions"
+            }
+        }()
+        try c.encodeIfPresent(legacy, forKey: .triggerType)
     }
 }
 

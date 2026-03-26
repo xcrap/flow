@@ -71,7 +71,8 @@ public protocol AIProvider: Sendable {
         model: String,
         effort: String?,
         systemPrompt: String?,
-        permissionMode: String?,
+        agentMode: AgentMode?,
+        agentAccess: AgentAccess?,
         workingDirectory: URL?,
         resumeSessionID: String?
     ) -> ProviderStreamHandle

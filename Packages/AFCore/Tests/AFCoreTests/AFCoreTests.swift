@@ -265,6 +265,8 @@ final class AFCoreTests: XCTestCase {
         XCTAssertNil(config.transformExpression)
         XCTAssertNil(config.toolName)
         XCTAssertNil(config.toolParameters)
+        XCTAssertNil(config.agentMode)
+        XCTAssertNil(config.agentAccess)
     }
 
     func testNodeConfigurationAllFields() throws {
@@ -920,5 +922,119 @@ final class RuntimeDiscoveryTests: XCTestCase {
 
         let health = await discovery.allHealth()
         XCTAssertEqual(health["missing"], .notFound)
+    }
+}
+
+// MARK: - AgentMode & AgentAccess Tests
+
+final class AgentModeAccessTests: XCTestCase {
+
+    func testAgentModeRawValues() {
+        XCTAssertEqual(AgentMode.auto.rawValue, "auto")
+        XCTAssertEqual(AgentMode.plan.rawValue, "plan")
+    }
+
+    func testAgentAccessRawValues() {
+        XCTAssertEqual(AgentAccess.supervised.rawValue, "supervised")
+        XCTAssertEqual(AgentAccess.acceptEdits.rawValue, "acceptEdits")
+        XCTAssertEqual(AgentAccess.fullAccess.rawValue, "fullAccess")
+    }
+
+    func testAgentModeRoundTrip() throws {
+        for mode in AgentMode.allCases {
+            let data = try JSONEncoder().encode(mode)
+            let decoded = try JSONDecoder().decode(AgentMode.self, from: data)
+            XCTAssertEqual(decoded, mode)
+        }
+    }
+
+    func testAgentAccessRoundTrip() throws {
+        for access in AgentAccess.allCases {
+            let data = try JSONEncoder().encode(access)
+            let decoded = try JSONDecoder().decode(AgentAccess.self, from: data)
+            XCTAssertEqual(decoded, access)
+        }
+    }
+
+    func testNodeConfigurationWithNewFields() throws {
+        let config = NodeConfiguration(agentMode: .plan, agentAccess: .supervised)
+        XCTAssertEqual(config.agentMode, .plan)
+        XCTAssertEqual(config.agentAccess, .supervised)
+        XCTAssertEqual(config.resolvedMode, .plan)
+        XCTAssertEqual(config.resolvedAccess, .supervised)
+    }
+
+    func testNewFieldsRoundTrip() throws {
+        let config = NodeConfiguration(providerID: "claude", agentMode: .plan, agentAccess: .acceptEdits)
+        let data = try JSONEncoder().encode(config)
+        let decoded = try JSONDecoder().decode(NodeConfiguration.self, from: data)
+        XCTAssertEqual(decoded.agentMode, .plan)
+        XCTAssertEqual(decoded.agentAccess, .acceptEdits)
+        XCTAssertEqual(decoded.providerID, "claude")
+    }
+
+    // MARK: - Legacy Migration
+
+    private func decodeLegacy(_ json: String) throws -> NodeConfiguration {
+        let data = json.data(using: .utf8)!
+        return try JSONDecoder().decode(NodeConfiguration.self, from: data)
+    }
+
+    func testLegacyAutoMigratesToAutoFullAccess() throws {
+        let config = try decodeLegacy(#"{"triggerType":"auto"}"#)
+        XCTAssertEqual(config.agentMode, .auto)
+        XCTAssertEqual(config.agentAccess, .fullAccess)
+    }
+
+    func testLegacyPlanMigratesToPlanFullAccess() throws {
+        let config = try decodeLegacy(#"{"triggerType":"plan"}"#)
+        XCTAssertEqual(config.agentMode, .plan)
+        XCTAssertEqual(config.agentAccess, .fullAccess)
+    }
+
+    func testLegacyAcceptEditsMigrates() throws {
+        let config = try decodeLegacy(#"{"triggerType":"acceptEdits"}"#)
+        XCTAssertEqual(config.agentMode, .auto)
+        XCTAssertEqual(config.agentAccess, .acceptEdits)
+    }
+
+    func testLegacyBypassPermissionsMigrates() throws {
+        let config = try decodeLegacy(#"{"triggerType":"bypassPermissions"}"#)
+        XCTAssertEqual(config.agentMode, .auto)
+        XCTAssertEqual(config.agentAccess, .fullAccess)
+    }
+
+    func testLegacyDefaultMigratesToSupervised() throws {
+        let config = try decodeLegacy(#"{"triggerType":"default"}"#)
+        XCTAssertEqual(config.agentMode, .auto)
+        XCTAssertEqual(config.agentAccess, .supervised)
+    }
+
+    func testNewFieldsTakePriorityOverLegacy() throws {
+        let json = #"{"triggerType":"plan","agentMode":"auto","agentAccess":"supervised"}"#
+        let config = try decodeLegacy(json)
+        XCTAssertEqual(config.agentMode, .auto)
+        XCTAssertEqual(config.agentAccess, .supervised)
+    }
+
+    func testEmptyJsonDecodesCleanly() throws {
+        let config = try decodeLegacy("{}")
+        XCTAssertNil(config.agentMode)
+        XCTAssertNil(config.agentAccess)
+        XCTAssertNil(config.triggerType)
+    }
+
+    func testEncodesLegacyTriggerTypeForBackwardCompat() throws {
+        let config = NodeConfiguration(agentMode: .auto, agentAccess: .supervised)
+        let data = try JSONEncoder().encode(config)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(json["triggerType"] as? String, "default")
+    }
+
+    func testEncodesLegacyPlanTriggerType() throws {
+        let config = NodeConfiguration(agentMode: .plan, agentAccess: .fullAccess)
+        let data = try JSONEncoder().encode(config)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(json["triggerType"] as? String, "plan")
     }
 }

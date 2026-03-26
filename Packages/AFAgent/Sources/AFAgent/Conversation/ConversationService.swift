@@ -10,7 +10,8 @@ public final class ConversationService {
         let model: String
         let effort: String?
         let systemPrompt: String?
-        let permissionMode: String?
+        let agentMode: AgentMode?
+        let agentAccess: AgentAccess?
         let workingDirectory: URL?
         let resumeSessionID: String?
         let onComplete: (() -> Void)?
@@ -39,7 +40,8 @@ public final class ConversationService {
         model: String,
         effort: String? = nil,
         systemPrompt: String? = nil,
-        permissionMode: String? = nil,
+        agentMode: AgentMode? = nil,
+        agentAccess: AgentAccess? = nil,
         workingDirectory: URL? = nil,
         resumeSessionID: String? = nil,
         onComplete: (() -> Void)? = nil
@@ -53,7 +55,8 @@ public final class ConversationService {
             model: model,
             effort: effort,
             systemPrompt: systemPrompt,
-            permissionMode: permissionMode,
+            agentMode: agentMode,
+            agentAccess: agentAccess,
             workingDirectory: workingDirectory,
             resumeSessionID: resumeSessionID,
             onComplete: onComplete,
@@ -132,7 +135,8 @@ public final class ConversationService {
             model: request.model,
             effort: request.effort,
             systemPrompt: request.systemPrompt,
-            permissionMode: request.permissionMode,
+            agentMode: request.agentMode,
+            agentAccess: request.agentAccess,
             workingDirectory: request.workingDirectory,
             resumeSessionID: request.resumeSessionID ?? conversationState.sessionID
         )

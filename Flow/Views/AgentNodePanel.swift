@@ -19,7 +19,8 @@ struct AgentNodePanel: View {
     var onCancel: () -> Void
     var onClearConversation: () -> Void
     var onSystemPromptChange: (String) -> Void
-    var onPermissionModeChange: (String) -> Void
+    var onModeChange: (AgentMode) -> Void
+    var onAccessChange: (AgentAccess) -> Void
     var onRemoveQueuedPrompt: (Int) -> Void
     var onDelete: () -> Void
 
@@ -29,7 +30,8 @@ struct AgentNodePanel: View {
     @State private var selectedEffort: String
     @State private var showSettings = false
     @State private var systemPromptText: String
-    @State private var permissionMode: String
+    @State private var agentMode: AgentMode
+    @State private var agentAccess: AgentAccess
     @State private var isDragTargeted = false
     @FocusState private var inputFocused: Bool
 
@@ -53,7 +55,8 @@ struct AgentNodePanel: View {
         onCancel: @escaping () -> Void,
         onClearConversation: @escaping () -> Void,
         onSystemPromptChange: @escaping (String) -> Void,
-        onPermissionModeChange: @escaping (String) -> Void,
+        onModeChange: @escaping (AgentMode) -> Void,
+        onAccessChange: @escaping (AgentAccess) -> Void,
         onRemoveQueuedPrompt: @escaping (Int) -> Void,
         onDelete: @escaping () -> Void
     ) {
@@ -69,7 +72,8 @@ struct AgentNodePanel: View {
         self.onCancel = onCancel
         self.onClearConversation = onClearConversation
         self.onSystemPromptChange = onSystemPromptChange
-        self.onPermissionModeChange = onPermissionModeChange
+        self.onModeChange = onModeChange
+        self.onAccessChange = onAccessChange
         self.onRemoveQueuedPrompt = onRemoveQueuedPrompt
         self.onDelete = onDelete
 
@@ -83,7 +87,8 @@ struct AgentNodePanel: View {
         _selectedModel = State(initialValue: finalModel)
         _selectedEffort = State(initialValue: node.configuration.effort ?? "high")
         _systemPromptText = State(initialValue: node.configuration.systemPrompt ?? "")
-        _permissionMode = State(initialValue: node.configuration.triggerType ?? "auto")
+        _agentMode = State(initialValue: node.configuration.resolvedMode)
+        _agentAccess = State(initialValue: node.configuration.resolvedAccess)
     }
 
     var body: some View {
@@ -139,7 +144,8 @@ struct AgentNodePanel: View {
             selectedModel = node.configuration.modelID ?? models.first?.id ?? "sonnet"
             selectedEffort = node.configuration.effort ?? "high"
             systemPromptText = node.configuration.systemPrompt ?? ""
-            permissionMode = node.configuration.triggerType ?? "auto"
+            agentMode = node.configuration.resolvedMode
+            agentAccess = node.configuration.resolvedAccess
         }
     }
 
@@ -771,7 +777,7 @@ struct AgentNodePanel: View {
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(!systemPromptText.isEmpty || permissionMode != "auto" || selectedEffort != "high" ? .purple : .white.opacity(0.45))
+                        .foregroundStyle(!systemPromptText.isEmpty || agentMode != .auto || agentAccess != .fullAccess || selectedEffort != "high" ? .purple : .white.opacity(0.45))
                         .frame(width: 28, height: 24)
                         .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
                 }
@@ -958,13 +964,17 @@ struct AgentNodePanel: View {
                 Text("Mode")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
-                ForEach([("auto", "Auto (default)"), ("plan", "Plan")], id: \.0) { id, name in
+                let modeOptions: [(AgentMode, String)] = [
+                    (.auto, "Auto (default)"),
+                    (.plan, "Plan"),
+                ]
+                ForEach(modeOptions, id: \.0) { mode, name in
                     Button {
-                        permissionMode = id
-                        onPermissionModeChange(id)
+                        agentMode = mode
+                        onModeChange(mode)
                     } label: {
                         HStack(spacing: 8) {
-                            if id == permissionMode || (id == "auto" && !["auto", "plan"].contains(permissionMode)) {
+                            if mode == agentMode {
                                 Image(systemName: "checkmark")
                                     .font(.system(size: 11, weight: .bold))
                                     .frame(width: 16)
@@ -988,29 +998,18 @@ struct AgentNodePanel: View {
                 Text("Access")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
-                let accessOptions: [(String, String)] = [
-                    ("default", "Supervised"),
-                    ("acceptEdits", "Accept Edits"),
-                    ("bypassPermissions", "Full access"),
+                let accessOptions: [(AgentAccess, String)] = [
+                    (.supervised, "Supervised"),
+                    (.acceptEdits, "Accept Edits"),
+                    (.fullAccess, "Full access"),
                 ]
-                ForEach(accessOptions, id: \.0) { id, name in
-                    let isSelected = (id == "default" && ["default", "auto", "plan"].contains(permissionMode))
-                        || (id == "acceptEdits" && permissionMode == "acceptEdits")
-                        || (id == "bypassPermissions" && permissionMode == "bypassPermissions")
+                ForEach(accessOptions, id: \.0) { access, name in
                     Button {
-                        // Map access to permission mode, preserving the current mode choice
-                        switch id {
-                        case "acceptEdits":
-                            permissionMode = "acceptEdits"
-                        case "bypassPermissions":
-                            permissionMode = "bypassPermissions"
-                        default:
-                            permissionMode = "auto"
-                        }
-                        onPermissionModeChange(permissionMode)
+                        agentAccess = access
+                        onAccessChange(access)
                     } label: {
                         HStack(spacing: 8) {
-                            if isSelected {
+                            if access == agentAccess {
                                 Image(systemName: "checkmark")
                                     .font(.system(size: 11, weight: .bold))
                                     .frame(width: 16)
@@ -1133,9 +1132,14 @@ struct AgentNodePanel: View {
                 onEffortChange(effort)
             }
         case "/mode":
-            if let mode = arg {
-                permissionMode = mode
-                onPermissionModeChange(mode)
+            if let mode = arg, let parsed = AgentMode(rawValue: mode) {
+                agentMode = parsed
+                onModeChange(parsed)
+            }
+        case "/access":
+            if let access = arg, let parsed = AgentAccess(rawValue: access) {
+                agentAccess = parsed
+                onAccessChange(parsed)
             }
         default:
             // Unknown command — send as regular message
