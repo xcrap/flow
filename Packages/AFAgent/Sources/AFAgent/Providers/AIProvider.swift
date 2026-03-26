@@ -84,6 +84,7 @@ public struct AIModel: Identifiable, Codable, Sendable, Equatable {
     public let id: String
     public var name: String
     public var contextWindow: Int
+    public var availableContextWindows: [Int]
     public var supportsTools: Bool
     public var supportsVision: Bool
 
@@ -91,12 +92,16 @@ public struct AIModel: Identifiable, Codable, Sendable, Equatable {
         id: String,
         name: String,
         contextWindow: Int = 200_000,
+        availableContextWindows: [Int] = [],
         supportsTools: Bool = true,
         supportsVision: Bool = true
     ) {
         self.id = id
         self.name = name
         self.contextWindow = contextWindow
+        self.availableContextWindows = availableContextWindows.isEmpty
+            ? [contextWindow]
+            : availableContextWindows
         self.supportsTools = supportsTools
         self.supportsVision = supportsVision
     }

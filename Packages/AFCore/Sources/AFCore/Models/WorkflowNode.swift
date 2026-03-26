@@ -74,6 +74,7 @@ public struct NodeConfiguration: Codable, Sendable, Equatable {
     public var toolParameters: [String: String]?
     public var agentMode: AgentMode?
     public var agentAccess: AgentAccess?
+    public var contextWindowSize: Int?
 
     public var resolvedMode: AgentMode {
         agentMode ?? .auto
@@ -104,7 +105,8 @@ public struct NodeConfiguration: Codable, Sendable, Equatable {
         toolName: String? = nil,
         toolParameters: [String: String]? = nil,
         agentMode: AgentMode? = nil,
-        agentAccess: AgentAccess? = nil
+        agentAccess: AgentAccess? = nil,
+        contextWindowSize: Int? = nil
     ) {
         self.providerID = providerID
         self.modelID = modelID
@@ -122,6 +124,7 @@ public struct NodeConfiguration: Codable, Sendable, Equatable {
         self.toolParameters = toolParameters
         self.agentMode = agentMode
         self.agentAccess = agentAccess
+        self.contextWindowSize = contextWindowSize
     }
 
     // MARK: - Backward Compatible Decoding

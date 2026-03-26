@@ -27,19 +27,20 @@ private struct ClaudeLineBuffer: Sendable {
     }
 }
 
-private let claudeEffectiveContextWindow = 200_000
+private let claudeContextWindows = [128_000, 200_000, 1_000_000]
+private let claudeDefaultContext = 200_000
 
 public final class ClaudeCodeProvider: AIProvider, Sendable {
     public let id = "claude"
     public let displayName = "Claude (via Claude Code)"
 
     public let availableModels: [AIModel] = [
-        AIModel(id: "sonnet", name: "Sonnet (latest)", contextWindow: claudeEffectiveContextWindow),
-        AIModel(id: "opus", name: "Opus (latest)", contextWindow: claudeEffectiveContextWindow),
-        AIModel(id: "haiku", name: "Haiku (latest)", contextWindow: claudeEffectiveContextWindow),
-        AIModel(id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: claudeEffectiveContextWindow),
-        AIModel(id: "claude-opus-4-6", name: "Claude Opus 4.6", contextWindow: claudeEffectiveContextWindow),
-        AIModel(id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", contextWindow: claudeEffectiveContextWindow),
+        AIModel(id: "sonnet", name: "Sonnet (latest)", contextWindow: claudeDefaultContext, availableContextWindows: claudeContextWindows),
+        AIModel(id: "opus", name: "Opus (latest)", contextWindow: claudeDefaultContext, availableContextWindows: claudeContextWindows),
+        AIModel(id: "haiku", name: "Haiku (latest)", contextWindow: claudeDefaultContext, availableContextWindows: claudeContextWindows),
+        AIModel(id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: claudeDefaultContext, availableContextWindows: claudeContextWindows),
+        AIModel(id: "claude-opus-4-6", name: "Claude Opus 4.6", contextWindow: claudeDefaultContext, availableContextWindows: claudeContextWindows),
+        AIModel(id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", contextWindow: claudeDefaultContext, availableContextWindows: claudeContextWindows),
     ]
 
     private let discovery: RuntimeDiscovery

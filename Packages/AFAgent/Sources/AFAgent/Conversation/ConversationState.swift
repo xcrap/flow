@@ -26,6 +26,7 @@ public final class ConversationState {
     public var totalReasoningOutputTokens: Int = 0
     public var totalTokens: Int = 0
     public var reportedContextWindow: Int?
+    public var configuredContextWindow: Int?
     public var currentContextTokens: Int?
     public var queuedPromptCount: Int = 0
     public var queuedPromptPreviews: [String] = []
@@ -228,7 +229,7 @@ public final class ConversationState {
         totalCachedInputTokens = cachedInputTokens
         totalReasoningOutputTokens = reasoningOutputTokens
         self.totalTokens = totalTokens
-        if let contextWindow, contextWindow > 0 {
+        if configuredContextWindow == nil, let contextWindow, contextWindow > 0 {
             reportedContextWindow = contextWindow
         }
     }
@@ -245,7 +246,7 @@ public final class ConversationState {
             totalTokens,
             inputTokens + outputTokens + cachedInputTokens + reasoningOutputTokens
         )
-        if let contextWindow, contextWindow > 0 {
+        if configuredContextWindow == nil, let contextWindow, contextWindow > 0 {
             reportedContextWindow = contextWindow
         }
     }

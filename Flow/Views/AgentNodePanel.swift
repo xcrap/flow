@@ -21,6 +21,7 @@ struct AgentNodePanel: View {
     var onSystemPromptChange: (String) -> Void
     var onModeChange: (AgentMode) -> Void
     var onAccessChange: (AgentAccess) -> Void
+    var onContextWindowChange: (Int?) -> Void
     var onRemoveQueuedPrompt: (Int) -> Void
     var onDelete: () -> Void
 
@@ -32,6 +33,7 @@ struct AgentNodePanel: View {
     @State private var systemPromptText: String
     @State private var agentMode: AgentMode
     @State private var agentAccess: AgentAccess
+    @State private var selectedContextWindow: Int?
     @State private var isDragTargeted = false
     @FocusState private var inputFocused: Bool
 
@@ -57,6 +59,7 @@ struct AgentNodePanel: View {
         onSystemPromptChange: @escaping (String) -> Void,
         onModeChange: @escaping (AgentMode) -> Void,
         onAccessChange: @escaping (AgentAccess) -> Void,
+        onContextWindowChange: @escaping (Int?) -> Void,
         onRemoveQueuedPrompt: @escaping (Int) -> Void,
         onDelete: @escaping () -> Void
     ) {
@@ -74,6 +77,7 @@ struct AgentNodePanel: View {
         self.onSystemPromptChange = onSystemPromptChange
         self.onModeChange = onModeChange
         self.onAccessChange = onAccessChange
+        self.onContextWindowChange = onContextWindowChange
         self.onRemoveQueuedPrompt = onRemoveQueuedPrompt
         self.onDelete = onDelete
 
@@ -89,6 +93,7 @@ struct AgentNodePanel: View {
         _systemPromptText = State(initialValue: node.configuration.systemPrompt ?? "")
         _agentMode = State(initialValue: node.configuration.resolvedMode)
         _agentAccess = State(initialValue: node.configuration.resolvedAccess)
+        _selectedContextWindow = State(initialValue: node.configuration.contextWindowSize)
     }
 
     var body: some View {
@@ -539,6 +544,11 @@ struct AgentNodePanel: View {
     }
 
     private var contextLimitForDisplay: Int? {
+        // User-configured context window takes precedence
+        if let configured = selectedContextWindow {
+            return configured
+        }
+
         let selectedModelContextWindow = availableModels.first(where: { $0.id == selectedModel })?.contextWindow
 
         if selectedProvider == "claude" {
@@ -901,6 +911,42 @@ struct AgentNodePanel: View {
                 }
             }
 
+            Divider()
+
+            // Context Window
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Context Window")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+
+                let model = availableModels.first(where: { $0.id == selectedModel })
+                let options = model?.availableContextWindows ?? [200_000]
+                let defaultWindow = model?.contextWindow ?? 200_000
+
+                ForEach(options, id: \.self) { size in
+                    let isSelected = (selectedContextWindow ?? defaultWindow) == size
+                    Button {
+                        selectedContextWindow = size
+                        onContextWindowChange(size)
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isSelected {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .frame(width: 16)
+                            } else {
+                                Spacer().frame(width: 16)
+                            }
+                            Text(Self.formatContextWindow(size) + (size == defaultWindow ? " (default)" : ""))
+                                .font(.system(size: 14))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
             // System prompt (collapsible)
             if !systemPromptText.isEmpty {
                 Divider()
@@ -917,6 +963,17 @@ struct AgentNodePanel: View {
         }
         .padding(14)
         .frame(width: 220)
+    }
+
+    private static func formatContextWindow(_ tokens: Int) -> String {
+        if tokens >= 1_000_000 {
+            let m = Double(tokens) / 1_000_000
+            return m.truncatingRemainder(dividingBy: 1) == 0
+                ? "\(Int(m))M"
+                : String(format: "%.1fM", m)
+        } else {
+            return "\(tokens / 1_000)K"
+        }
     }
 
     private var canSend: Bool {
@@ -1587,13 +1644,18 @@ private struct VerticalOnlyScrollView<Content: View>: NSViewRepresentable {
             Self.patchNestedScrollViews(in: scrollView)
         }
 
-        // Explicit scroll-to-bottom when trigger changes (new messages, streaming start)
+        // Scroll to bottom when trigger changes (new messages, streaming start).
         if scrollToBottomTrigger != context.coordinator.lastScrollTrigger {
             context.coordinator.lastScrollTrigger = scrollToBottomTrigger
+            context.coordinator.isAtBottom = true
             DispatchQueue.main.async {
-                if context.coordinator.isAtBottom {
-                    context.coordinator.scrollToBottom(animated: true)
-                }
+                context.coordinator.scrollToBottom(animated: true)
+            }
+        } else if context.coordinator.isAtBottom {
+            // During streaming, content grows but the trigger stays constant.
+            // Scroll after the hosting view lays out the new content.
+            DispatchQueue.main.async {
+                context.coordinator.scrollToBottom(animated: false)
             }
         }
     }
@@ -1614,6 +1676,7 @@ private struct VerticalOnlyScrollView<Content: View>: NSViewRepresentable {
         var hostingView: NSHostingView<Content>?
         var lastScrollTrigger = 0
         var isAtBottom = true
+        private var isAnimatingScroll = false
         nonisolated(unsafe) private var eventMonitor: Any?
 
         func setupObservers() {
@@ -1660,6 +1723,9 @@ private struct VerticalOnlyScrollView<Content: View>: NSViewRepresentable {
         }
 
         @objc private func boundsDidChange(_ notification: Notification) {
+            // Skip during programmatic scroll animations — the intermediate
+            // positions would incorrectly set isAtBottom = false
+            guard !isAnimatingScroll else { return }
             guard let scrollView, let documentView = scrollView.documentView else { return }
             let maxY = documentView.frame.height - scrollView.contentView.bounds.height
             let currentY = scrollView.contentView.bounds.origin.y
@@ -1668,7 +1734,7 @@ private struct VerticalOnlyScrollView<Content: View>: NSViewRepresentable {
 
         @objc private func documentFrameDidChange(_ notification: Notification) {
             if isAtBottom {
-                scrollToBottom(animated: true)
+                scrollToBottom(animated: false)
             }
         }
 
@@ -1677,14 +1743,19 @@ private struct VerticalOnlyScrollView<Content: View>: NSViewRepresentable {
             let maxY = documentView.frame.height - scrollView.contentView.bounds.height
             guard maxY > 0 else { return }
             let point = NSPoint(x: 0, y: maxY)
+            isAnimatingScroll = true
             if animated {
                 NSAnimationContext.runAnimationGroup { ctx in
                     ctx.duration = 0.15
                     ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
                     scrollView.contentView.animator().setBoundsOrigin(point)
+                } completionHandler: { [weak self] in
+                    self?.isAnimatingScroll = false
+                    self?.isAtBottom = true
                 }
             } else {
                 scrollView.contentView.scroll(to: point)
+                isAnimatingScroll = false
             }
             scrollView.reflectScrolledClipView(scrollView.contentView)
             isAtBottom = true

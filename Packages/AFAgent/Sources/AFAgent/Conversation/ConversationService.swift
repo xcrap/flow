@@ -122,8 +122,12 @@ public final class ConversationService {
             return
         }
 
-        if let contextWindow = provider.availableModels.first(where: { $0.id == request.model })?.contextWindow,
-           contextWindow > 0
+        // Use user-configured context window, or fall back to model default
+        if let configured = conversationState.configuredContextWindow {
+            conversationState.reportedContextWindow = configured
+        } else if conversationState.reportedContextWindow == nil,
+                  let contextWindow = provider.availableModels.first(where: { $0.id == request.model })?.contextWindow,
+                  contextWindow > 0
         {
             conversationState.reportedContextWindow = contextWindow
         }

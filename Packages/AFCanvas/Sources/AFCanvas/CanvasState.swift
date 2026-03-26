@@ -16,6 +16,27 @@ public final class CanvasState {
     public var marqueeOrigin: CGPoint?
     public var marqueeRect: CGRect?
     public var viewportSize: CGSize = CGSize(width: 900, height: 700)
+    public var lastZoomScrollTime: CFTimeInterval = 0
+
+    /// Discrete zoom levels for crisp rendering on Retina displays.
+    public static let zoomLevels: [Double] = [
+        0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0,
+    ]
+
+    /// Returns the nearest discrete zoom level.
+    public static func snapZoom(_ value: Double) -> Double {
+        zoomLevels.min(by: { abs($0 - value) < abs($1 - value) }) ?? 1.0
+    }
+
+    /// Returns the next zoom level up from the current value, or the max.
+    public static func nextZoomLevel(above current: Double) -> Double {
+        zoomLevels.first(where: { $0 > current + 0.01 }) ?? zoomLevels.last!
+    }
+
+    /// Returns the next zoom level down from the current value, or the min.
+    public static func nextZoomLevel(below current: Double) -> Double {
+        zoomLevels.last(where: { $0 < current - 0.01 }) ?? zoomLevels.first!
+    }
 
     public init() {}
 

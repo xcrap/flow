@@ -286,6 +286,7 @@ struct ProjectEditorView: View {
         case .agent:
             let projectID = project.project.id
             let conversation = conversationFor(node.id, in: projectID)
+            let _ = conversation.configuredContextWindow = node.configuration.contextWindowSize
             AgentNodePanel(
                     node: node,
                     nodeNumber: nodeNumber,
@@ -333,6 +334,14 @@ struct ProjectEditorView: View {
                     },
                     onAccessChange: { access in
                         project.nodes[node.id]?.configuration.agentAccess = access
+                        project.onChange?()
+                    },
+                    onContextWindowChange: { size in
+                        project.nodes[node.id]?.configuration.contextWindowSize = size
+                        conversation.configuredContextWindow = size
+                        if let size {
+                            conversation.reportedContextWindow = size
+                        }
                         project.onChange?()
                     },
                     onRemoveQueuedPrompt: { index in

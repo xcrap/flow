@@ -37,14 +37,20 @@ public struct ProjectCanvasView<NodeContent: View>: View {
             .gesture(canvasZoomGesture)
             .canvasEventMonitor(
                 onZoomScroll: { [projectState] delta, mouseLocation in
+                    // Cooldown: ignore rapid-fire scroll events to prevent bounce
+                    let now = CACurrentMediaTime()
+                    guard now - projectState.canvasState.lastZoomScrollTime > 0.25 else { return }
+                    projectState.canvasState.lastZoomScrollTime = now
+
                     let oldZoom = projectState.canvasState.zoom
-                    let factor = 1.0 + (delta.y * 0.01)
-                    let newZoom = max(0.1, min(3.0, oldZoom * factor))
+                    let newZoom = delta.y > 0
+                        ? CanvasState.nextZoomLevel(above: oldZoom)
+                        : CanvasState.nextZoomLevel(below: oldZoom)
+                    guard newZoom != oldZoom else { return }
 
                     let offset = projectState.canvasState.offset
 
-                    // Zoom toward mouse pointer: keep the canvas point under
-                    // the cursor fixed in screen space
+                    // Instant snap — no animation avoids overlapping animation bounce
                     projectState.canvasState.offset = CGPoint(
                         x: mouseLocation.x - (mouseLocation.x - offset.x) * (newZoom / oldZoom),
                         y: mouseLocation.y - (mouseLocation.y - offset.y) * (newZoom / oldZoom)
@@ -94,6 +100,9 @@ public struct ProjectCanvasView<NodeContent: View>: View {
     private var canvasZoomGesture: some Gesture {
         MagnifyGesture()
             .onChanged { value in
+                // Ignore tiny magnification changes (can trigger on clicks)
+                guard abs(value.magnification - 1.0) > 0.01 else { return }
+
                 if zoomStart == nil {
                     zoomStart = projectState.canvasState.zoom
                 }
@@ -101,7 +110,6 @@ public struct ProjectCanvasView<NodeContent: View>: View {
                 let oldZoom = projectState.canvasState.zoom
                 let newZoom = max(0.1, min(3.0, baseZoom * value.magnification))
 
-                // Zoom toward viewport center (best approximation for trackpad pinch)
                 let vp = projectState.canvasState.viewportSize
                 let cx = vp.width / 2
                 let cy = vp.height / 2
@@ -113,6 +121,24 @@ public struct ProjectCanvasView<NodeContent: View>: View {
                 projectState.canvasState.zoom = newZoom
             }
             .onEnded { _ in
+                // Only snap if a real pinch gesture occurred
+                guard zoomStart != nil else { return }
+
+                let oldZoom = projectState.canvasState.zoom
+                let snapped = CanvasState.snapZoom(oldZoom)
+                if snapped != oldZoom {
+                    let vp = projectState.canvasState.viewportSize
+                    let cx = vp.width / 2
+                    let cy = vp.height / 2
+                    let offset = projectState.canvasState.offset
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        projectState.canvasState.offset = CGPoint(
+                            x: cx - (cx - offset.x) * (snapped / oldZoom),
+                            y: cy - (cy - offset.y) * (snapped / oldZoom)
+                        )
+                        projectState.canvasState.zoom = snapped
+                    }
+                }
                 zoomStart = nil
                 projectState.onChange?()
             }
