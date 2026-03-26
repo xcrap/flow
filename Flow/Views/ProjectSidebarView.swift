@@ -152,6 +152,7 @@ struct ProjectSidebarView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
             .background {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -163,6 +164,9 @@ struct ProjectSidebarView: View {
             }
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
         .contextMenu {
             Button("Rename") {
                 renamingProjectID = project.project.id
