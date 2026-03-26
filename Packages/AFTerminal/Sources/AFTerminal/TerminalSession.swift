@@ -28,6 +28,7 @@ public final class TerminalSession {
         self.launchDirectory = currentDirectory
         self.currentDirectory = currentDirectory
         self.shellPath = shellPath?.nilIfEmpty
+            ?? Self.userLoginShell()
             ?? ProcessInfo.processInfo.environment["SHELL"]?.nilIfEmpty
             ?? "/bin/zsh"
         self.delegateBridge = DelegateBridge()
@@ -162,6 +163,14 @@ public final class TerminalSession {
         isRunning = false
         lastExitCode = exitCode
         onChange?()
+    }
+
+    private static func userLoginShell() -> String? {
+        guard let pw = getpwuid(getuid()),
+              let shell = pw.pointee.pw_shell
+        else { return nil }
+        let path = String(cString: shell)
+        return path.isEmpty ? nil : path
     }
 
     private func normalizedDirectory(from rawValue: String?) -> String? {

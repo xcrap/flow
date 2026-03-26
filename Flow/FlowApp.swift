@@ -72,22 +72,6 @@ struct FlowApp: App {
                 }
             }
 
-            // Bare ⌫ (Delete/Backspace) — only when no text field has focus
-            if chars == "\u{7F}",
-               !flags.contains(.command), !flags.contains(.option), !flags.contains(.control)
-            {
-                if let firstResponder = NSApp.keyWindow?.firstResponder,
-                   firstResponder is NSTextView
-                {
-                    return event
-                }
-                if let project = appState.activeProject, !project.selectedNodeIDs.isEmpty {
-                    project.deleteSelected()
-                    appState.flushSaveNow()
-                    return nil
-                }
-            }
-
             return event
         }
     }
