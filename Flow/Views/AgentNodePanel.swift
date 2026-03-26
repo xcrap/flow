@@ -318,15 +318,32 @@ struct AgentNodePanel: View {
                         case .single(let message):
                             MessageRow(message: message)
                                 .id(message.id)
+                                .onAppear {
+                                    if message.id == groupedMessages.last?.id {
+                                        withAnimation(.easeOut(duration: 0.15)) {
+                                            proxy.scrollTo(message.id, anchor: .bottom)
+                                        }
+                                    }
+                                }
                         case .toolCalls(let messages):
                             ToolCallGroupView(messages: messages)
                                 .id(group.id)
+                                .onAppear {
+                                    if group.id == groupedMessages.last?.id {
+                                        withAnimation(.easeOut(duration: 0.15)) {
+                                            proxy.scrollTo(group.id, anchor: .bottom)
+                                        }
+                                    }
+                                }
                         }
                     }
 
                     if conversation.isStreaming && !conversation.streamingText.isEmpty {
                         streamingRow
                             .id("streaming")
+                            .onAppear {
+                                proxy.scrollTo("streaming", anchor: .bottom)
+                            }
                     }
 
                     if let error = conversation.error {
@@ -346,25 +363,7 @@ struct AgentNodePanel: View {
                     proxy.scrollTo(lastGroup.id, anchor: .bottom)
                 }
             }
-            .onChange(of: conversation.messages.count) {
-                withAnimation(.easeOut(duration: 0.15)) {
-                    if let lastGroup = groupedMessages.last {
-                        proxy.scrollTo(lastGroup.id, anchor: .bottom)
-                    }
-                }
-            }
-            .onChange(of: conversation.runtimeActivities.count) {
-                withAnimation(.easeOut(duration: 0.15)) {
-                    if let lastGroup = groupedMessages.last {
-                        proxy.scrollTo(lastGroup.id, anchor: .bottom)
-                    } else if conversation.isStreaming {
-                        proxy.scrollTo("streaming", anchor: .bottom)
-                    }
-                }
-            }
             .onChange(of: conversation.streamingText) {
-                // Throttled: ScrollView coalesces rapid layout passes,
-                // but avoid redundant calls by only scrolling when visible.
                 if !conversation.streamingText.isEmpty {
                     proxy.scrollTo("streaming", anchor: .bottom)
                 }
