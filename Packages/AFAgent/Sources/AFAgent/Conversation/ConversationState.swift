@@ -5,6 +5,7 @@ import AFCore
 @MainActor
 public final class ConversationState {
     private static let maxRuntimeActivities = 200
+    private static let maxVisibleQueuedPromptPreviews = 3
 
     public let nodeID: UUID
     public var messages: [ConversationMessage] = []
@@ -252,20 +253,9 @@ public final class ConversationState {
     }
 
     public func enqueuePrompt(_ prompt: String) {
-        let preview = prompt
-            .replacingOccurrences(of: "\n", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
+        let preview = Self.queuedPromptPreview(for: prompt)
         queuedPromptPreviews.append(preview)
         queuedPromptCount = queuedPromptPreviews.count
-        recordRuntimeActivity(
-            kind: .queue,
-            tone: .info,
-            summary: "Prompt queued",
-            detail: preview,
-            state: "queued",
-            turnID: activeTurnID
-        )
     }
 
     @discardableResult
@@ -278,6 +268,11 @@ public final class ConversationState {
         let prompt = queuedPromptPreviews.removeFirst()
         queuedPromptCount = queuedPromptPreviews.count
         return prompt
+    }
+
+    public func updateQueuedPrompt(at index: Int, prompt: String) {
+        guard index >= 0, index < queuedPromptPreviews.count else { return }
+        queuedPromptPreviews[index] = Self.queuedPromptPreview(for: prompt)
     }
 
     public func removeQueuedPrompt(at index: Int) {
@@ -353,7 +348,7 @@ public final class ConversationState {
     }
 
     public var visibleQueuedPromptPreviews: [String] {
-        Array(queuedPromptPreviews.prefix(3))
+        Array(queuedPromptPreviews.prefix(Self.maxVisibleQueuedPromptPreviews))
     }
 
     public var latestRuntimeActivity: ConversationRuntimeActivity? {
@@ -365,6 +360,7 @@ public final class ConversationState {
         var seen = Set<ConversationRuntimeActivityKind>()
         var deduped: [ConversationRuntimeActivity] = []
         for activity in runtimeActivities.suffix(8).reversed() {
+            guard activity.kind != .queue else { continue }
             if activity.kind == .session || activity.kind == .contextCompaction {
                 // For session/compaction, keep only the most recent occurrence
                 guard seen.insert(activity.kind).inserted else { continue }
@@ -372,6 +368,12 @@ public final class ConversationState {
             deduped.append(activity)
         }
         return Array(deduped.reversed().suffix(4))
+    }
+
+    private static func queuedPromptPreview(for prompt: String) -> String {
+        prompt
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

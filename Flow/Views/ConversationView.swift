@@ -441,9 +441,14 @@ extension ProviderSessionPhase {
 
 // MARK: - Tool Call Group
 
-struct ToolCallGroupView: View {
+@MainActor
+struct ToolCallGroupView: View, Equatable {
     let messages: [ConversationMessage]
     @State private var isExpanded = false
+
+    nonisolated static func == (lhs: ToolCallGroupView, rhs: ToolCallGroupView) -> Bool {
+        lhs.messages == rhs.messages
+    }
 
     private var toolCalls: [(name: String, summary: String)] {
         messages.compactMap { message in

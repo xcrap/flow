@@ -2,6 +2,8 @@ import SwiftUI
 import AFCore
 
 struct SettingsView: View {
+    static let preferredPanelWidth: CGFloat = 520
+
     var onClose: (() -> Void)? = nil
 
     @Environment(RuntimeHealthMonitor.self) private var healthMonitor
@@ -26,7 +28,7 @@ struct SettingsView: View {
         }
     }
 
-    private let shortcuts: [(String, String)] = [
+    private let shortcuts: [(title: String, shortcut: String)] = [
         ("New Project", "⌘N"),
         ("New AI Agent", "⌘I"),
         ("New Terminal", "⌘T"),
@@ -43,6 +45,8 @@ struct SettingsView: View {
         ("Send Message", "↩ / ⌘↩"),
         ("Insert Line Break", "⇧↩"),
     ]
+
+    private let shortcutColumnWidth: CGFloat = 208
 
     var body: some View {
         VStack(spacing: 0) {
@@ -134,12 +138,8 @@ struct SettingsView: View {
                     }
 
                     settingsSection("Keyboard Shortcuts", icon: "keyboard") {
-                        ForEach(shortcuts, id: \.0) { shortcut in
-                            settingsRow(shortcut.0) {
-                                Text(shortcut.1)
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                            }
+                        ForEach(shortcuts, id: \.title) { shortcut in
+                            shortcutRow(shortcut.title, shortcut: shortcut.shortcut)
                         }
                     }
                 }
@@ -256,5 +256,81 @@ struct SettingsView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    private func shortcutRow(_ label: String, shortcut: String) -> some View {
+        HStack(alignment: .top, spacing: 18) {
+            Text(label)
+                .font(.system(size: 13))
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 12) {
+                let alternatives = shortcutAlternatives(for: shortcut)
+
+                ForEach(Array(alternatives.enumerated()), id: \.offset) { index, combination in
+                    if index > 0 {
+                        Text("/")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                    }
+
+                    HStack(spacing: 6) {
+                        let tokens = shortcutTokens(for: combination)
+
+                        ForEach(Array(tokens.enumerated()), id: \.offset) { _, token in
+                            shortcutKey(token)
+                        }
+                    }
+                }
+            }
+            .frame(width: shortcutColumnWidth, alignment: .trailing)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private func shortcutAlternatives(for shortcut: String) -> [String] {
+        shortcut
+            .split(separator: "/")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+    }
+
+    private func shortcutTokens(for shortcut: String) -> [String] {
+        let modifierGlyphs: Set<Character> = ["⌘", "⇧", "⌥", "⌃"]
+        var tokens: [String] = []
+        var pending = ""
+
+        for character in shortcut {
+            if modifierGlyphs.contains(character) {
+                if !pending.isEmpty {
+                    tokens.append(pending)
+                    pending = ""
+                }
+                tokens.append(String(character))
+            } else {
+                pending.append(character)
+            }
+        }
+
+        if !pending.isEmpty {
+            tokens.append(pending)
+        }
+
+        return tokens
+    }
+
+    private func shortcutKey(_ token: String) -> some View {
+        Text(token)
+            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            .foregroundStyle(.secondary)
+            .frame(minWidth: max(22, CGFloat(token.count) * 11), minHeight: 22)
+            .padding(.horizontal, 6)
+            .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 0.75)
+            }
     }
 }

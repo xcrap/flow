@@ -60,6 +60,7 @@ public final class ProjectState {
     }
 
     public func bringToFront(_ id: UUID) {
+        guard nodeZOrder.last != id else { return }
         nodeZOrder.removeAll { $0 == id }
         nodeZOrder.append(id)
         onChange?()
@@ -136,6 +137,21 @@ public final class ProjectState {
     // MARK: - Selection
 
     public func selectNode(_ id: UUID, additive: Bool = false) {
+        if additive {
+            let inserted = selectedNodeIDs.insert(id).inserted
+            if inserted {
+                selectedConnectionIDs.removeAll()
+            }
+            return
+        }
+
+        if selectedNodeIDs.count == 1,
+           selectedNodeIDs.contains(id),
+           selectedConnectionIDs.isEmpty
+        {
+            return
+        }
+
         if !additive {
             selectedNodeIDs.removeAll()
             selectedConnectionIDs.removeAll()

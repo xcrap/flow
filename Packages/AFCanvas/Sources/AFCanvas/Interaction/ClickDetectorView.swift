@@ -19,6 +19,26 @@ class ClickDetectorNSView: NSView {
     weak var projectState: ProjectState?
     private var monitor: Any?
 
+    private static func shouldIgnoreSelection(for hitView: NSView) -> Bool {
+        var current: NSView? = hitView
+
+        while let view = current {
+            let className = NSStringFromClass(type(of: view))
+
+            if view is NSTextView ||
+                view is NSControl ||
+                view is NSScrollView ||
+                view is NSClipView ||
+                className.contains("PromptTextEditor")
+            {
+                return true
+            }
+            current = view.superview
+        }
+
+        return false
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         removeMonitor()
@@ -46,8 +66,14 @@ class ClickDetectorNSView: NSView {
 
     private func handleClick(_ event: NSEvent) {
         guard let projectState,
-              let _ = window
+              let window
         else { return }
+
+        if let hitView = window.contentView?.hitTest(event.locationInWindow),
+           Self.shouldIgnoreSelection(for: hitView)
+        {
+            return
+        }
 
         // Convert window coords to THIS view's local coords
         let localPoint = convert(event.locationInWindow, from: nil)
@@ -77,6 +103,16 @@ class ClickDetectorNSView: NSView {
             )
 
             if nodeRect.contains(canvasClickPoint) {
+                let isAlreadyPrimarySelection =
+                    projectState.selectedNodeIDs.count == 1 &&
+                    projectState.selectedNodeIDs.contains(nodeID) &&
+                    projectState.selectedConnectionIDs.isEmpty &&
+                    projectState.nodeZOrder.last == nodeID
+
+                if isAlreadyPrimarySelection {
+                    return
+                }
+
                 Task { @MainActor in
                     projectState.selectNode(nodeID)
                     projectState.bringToFront(nodeID)

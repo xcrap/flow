@@ -539,6 +539,39 @@ final class ConversationStateTests: XCTestCase {
     }
 
     @MainActor
+    func testUpdateQueuedPromptRefreshesPreview() throws {
+        let state = ConversationState(nodeID: UUID())
+
+        state.enqueuePrompt("original prompt")
+        state.updateQueuedPrompt(at: 0, prompt: "  steered\nprompt  ")
+
+        XCTAssertEqual(state.queuedPromptCount, 1)
+        XCTAssertEqual(state.queuedPromptPreviews, ["steered prompt"])
+    }
+
+    @MainActor
+    func testRecentRuntimeActivitiesExcludeQueueItems() throws {
+        let state = ConversationState(nodeID: UUID())
+
+        state.recordRuntimeActivity(
+            kind: .session,
+            tone: .success,
+            summary: "Session ready",
+            detail: "Codex",
+            state: "configured"
+        )
+        state.recordRuntimeActivity(
+            kind: .queue,
+            tone: .info,
+            summary: "Prompt queued",
+            detail: "testing",
+            state: "queued"
+        )
+
+        XCTAssertEqual(state.recentRuntimeActivities.map(\.kind), [.session])
+    }
+
+    @MainActor
     func testRecordRuntimeActivityCoalescesDuplicates() throws {
         let state = ConversationState(nodeID: UUID())
 
@@ -688,6 +721,47 @@ final class ConversationServiceTests: XCTestCase {
         XCTAssertEqual(completionCount, 2)
         XCTAssertFalse(state.isStreaming)
         XCTAssertEqual(state.runtimePhase, .idle)
+    }
+
+    @MainActor
+    func testUpdateQueuedPromptChangesQueuedRequestText() async throws {
+        let provider = MockProvider()
+        let registry = ProviderRegistry()
+        registry.register(provider)
+
+        let service = ConversationService(registry: registry)
+        let state = ConversationState(nodeID: UUID())
+
+        service.send(
+            prompt: "first",
+            to: state,
+            providerID: provider.id,
+            model: "mock-model"
+        )
+        service.send(
+            prompt: "second",
+            to: state,
+            providerID: provider.id,
+            model: "mock-model"
+        )
+
+        service.updateQueuedPrompt(
+            at: 0,
+            with: "steered second",
+            for: state.nodeID,
+            conversationState: state
+        )
+
+        XCTAssertEqual(service.queuedPrompt(at: 0, for: state.nodeID), "steered second")
+        XCTAssertEqual(state.queuedPromptPreviews, ["steered second"])
+
+        provider.yield(.initialized(sessionID: "session-1", model: "mock-model"), at: 0)
+        provider.finish(at: 0)
+
+        let didStartQueuedRequest = await waitForCondition {
+            provider.prompts == ["first", "steered second"]
+        }
+        XCTAssertTrue(didStartQueuedRequest)
     }
 
     @MainActor

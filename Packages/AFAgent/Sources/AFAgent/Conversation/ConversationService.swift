@@ -4,7 +4,7 @@ import AFCore
 @MainActor
 public final class ConversationService {
     private struct PendingRequest {
-        let prompt: String
+        var prompt: String
         let attachments: [Attachment]
         let providerID: String
         let model: String
@@ -78,6 +78,29 @@ public final class ConversationService {
         queue.remove(at: index)
         pendingRequests[nodeID] = queue.isEmpty ? nil : queue
         conversationState.removeQueuedPrompt(at: index)
+    }
+
+    public func queuedPrompt(at index: Int, for nodeID: UUID) -> String? {
+        guard let queue = pendingRequests[nodeID], index >= 0, index < queue.count else { return nil }
+        return queue[index].prompt
+    }
+
+    public func updateQueuedPrompt(
+        at index: Int,
+        with prompt: String,
+        for nodeID: UUID,
+        conversationState: ConversationState
+    ) {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrompt.isEmpty,
+              var queue = pendingRequests[nodeID],
+              index >= 0,
+              index < queue.count
+        else { return }
+
+        queue[index].prompt = trimmedPrompt
+        pendingRequests[nodeID] = queue
+        conversationState.updateQueuedPrompt(at: index, prompt: trimmedPrompt)
     }
 
     public func clearPendingRequests(for nodeID: UUID) {

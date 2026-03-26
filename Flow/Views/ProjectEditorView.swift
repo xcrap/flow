@@ -136,7 +136,7 @@ struct ProjectEditorView: View {
         if settingsVisible {
             Divider()
             SettingsView(onClose: { settingsVisible = false })
-                .frame(width: 420)
+                .frame(width: SettingsView.preferredPanelWidth)
                 .transition(.move(edge: .trailing))
         }
         }
@@ -349,8 +349,21 @@ struct ProjectEditorView: View {
                         }
                         project.onChange?()
                     },
+                    queuedPromptTextAt: { index in
+                        conversationService?.queuedPrompt(at: index, for: node.id)
+                    },
+                    onSteerQueuedPrompt: { index, prompt in
+                        conversationService?.updateQueuedPrompt(
+                            at: index,
+                            with: prompt,
+                            for: node.id,
+                            conversationState: conversation
+                        )
+                        saveConversations(for: projectID)
+                    },
                     onRemoveQueuedPrompt: { index in
                         conversationService?.removeQueuedPrompt(at: index, for: node.id, conversationState: conversation)
+                        saveConversations(for: projectID)
                     },
                     onDelete: {
                         project.removeNode(node.id)

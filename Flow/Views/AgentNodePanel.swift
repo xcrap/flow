@@ -6,6 +6,8 @@ import AFAgent
 import AFCanvas
 
 struct AgentNodePanel: View {
+    private static let maxRenderedMessages = 200
+
     @Environment(ProviderRegistry.self) private var providerRegistry
     let node: WorkflowNode
     let nodeNumber: Int?
@@ -22,6 +24,8 @@ struct AgentNodePanel: View {
     var onModeChange: (AgentMode) -> Void
     var onAccessChange: (AgentAccess) -> Void
     var onContextWindowChange: (Int?) -> Void
+    var queuedPromptTextAt: (Int) -> String?
+    var onSteerQueuedPrompt: (Int, String) -> Void
     var onRemoveQueuedPrompt: (Int) -> Void
     var onDelete: () -> Void
 
@@ -35,6 +39,9 @@ struct AgentNodePanel: View {
     @State private var agentAccess: AgentAccess
     @State private var selectedContextWindow: Int?
     @State private var isDragTargeted = false
+    @State private var showFullHistory = false
+    @State private var steeringQueuedPromptIndex: Int?
+    @State private var steeringQueuedPromptText = ""
     @FocusState private var inputFocused: Bool
 
     init(
@@ -53,6 +60,8 @@ struct AgentNodePanel: View {
         onModeChange: @escaping (AgentMode) -> Void,
         onAccessChange: @escaping (AgentAccess) -> Void,
         onContextWindowChange: @escaping (Int?) -> Void,
+        queuedPromptTextAt: @escaping (Int) -> String?,
+        onSteerQueuedPrompt: @escaping (Int, String) -> Void,
         onRemoveQueuedPrompt: @escaping (Int) -> Void,
         onDelete: @escaping () -> Void
     ) {
@@ -71,6 +80,8 @@ struct AgentNodePanel: View {
         self.onModeChange = onModeChange
         self.onAccessChange = onAccessChange
         self.onContextWindowChange = onContextWindowChange
+        self.queuedPromptTextAt = queuedPromptTextAt
+        self.onSteerQueuedPrompt = onSteerQueuedPrompt
         self.onRemoveQueuedPrompt = onRemoveQueuedPrompt
         self.onDelete = onDelete
 
@@ -146,6 +157,12 @@ struct AgentNodePanel: View {
             agentMode = node.configuration.resolvedMode
             agentAccess = node.configuration.resolvedAccess
             selectedContextWindow = node.configuration.contextWindowSize
+            cancelSteeringQueuedPrompt()
+        }
+        .onChange(of: conversation.queuedPromptCount) {
+            if steeringQueuedPromptIndex != nil {
+                cancelSteeringQueuedPrompt()
+            }
         }
     }
 
@@ -351,7 +368,7 @@ struct AgentNodePanel: View {
 
     private var messagesArea: some View {
         VerticalOnlyScrollView(
-            scrollToBottomTrigger: conversation.messages.count
+            scrollToBottomTrigger: displayedMessages.count
                 + conversation.runtimeActivities.count
                 + (conversation.isStreaming ? 1 : 0)
         ) {
@@ -367,13 +384,34 @@ struct AgentNodePanel: View {
                     RuntimeActivityList(activities: nonToolRuntimeActivities)
                 }
 
-                ForEach(groupedMessages) { group in
+                if hasHiddenHistory {
+                    Button {
+                        showFullHistory.toggle()
+                    } label: {
+                        Text(
+                            showFullHistory
+                                ? "Show only recent \(Self.maxRenderedMessages) messages"
+                                : "Show earlier \(hiddenMessageCount) messages"
+                        )
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(Color(nsColor: .controlBackgroundColor).opacity(0.2), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                ForEach(Array(groupedMessages.enumerated()), id: \.element.id) { _, group in
                     switch group {
                     case .single(let message):
                         MessageRow(message: message)
+                            .equatable()
                             .id(message.id)
                     case .toolCalls(let messages):
                         ToolCallGroupView(messages: messages)
+                            .equatable()
                             .id(group.id)
                     }
                 }
@@ -398,7 +436,23 @@ struct AgentNodePanel: View {
     }
 
     private var groupedMessages: [MessageGroup] {
-        MessageGroup.group(conversation.messages)
+        MessageGroup.group(displayedMessages)
+    }
+
+    private var displayedMessages: [ConversationMessage] {
+        if showFullHistory || conversation.messages.count <= Self.maxRenderedMessages {
+            return conversation.messages
+        }
+
+        return Array(conversation.messages.suffix(Self.maxRenderedMessages))
+    }
+
+    private var hasHiddenHistory: Bool {
+        conversation.messages.count > Self.maxRenderedMessages
+    }
+
+    private var hiddenMessageCount: Int {
+        max(0, conversation.messages.count - Self.maxRenderedMessages)
     }
 
     @ViewBuilder
@@ -422,35 +476,84 @@ struct AgentNodePanel: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(conversation.visibleQueuedPromptPreviews.enumerated()), id: \.offset) { index, preview in
-                        HStack(alignment: .top, spacing: 10) {
-                            Circle()
-                                .fill(Color.white.opacity(index == 0 ? 0.42 : 0.2))
-                                .frame(width: 6, height: 6)
-                                .padding(.top, 6)
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .top, spacing: 10) {
+                                Circle()
+                                    .fill(Color.white.opacity(index == 0 ? 0.42 : 0.2))
+                                    .frame(width: 6, height: 6)
+                                    .padding(.top, 6)
 
-                            Text(preview)
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                            if index == 0 {
-                                Text("next")
-                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                Text(preview)
+                                    .font(.system(size: 12))
                                     .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                if index == 0 {
+                                    Text("next")
+                                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                if selectedProvider == "codex" {
+                                    Button("Steer") {
+                                        beginSteeringQueuedPrompt(at: index)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                    .help("Edit queued prompt")
+                                }
+
+                                Button {
+                                    onRemoveQueuedPrompt(index)
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 16, height: 16)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .help("Remove from queue")
                             }
 
-                            Button {
-                                onRemoveQueuedPrompt(index)
-                            } label: {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 16, height: 16)
-                                    .contentShape(Rectangle())
+                            if steeringQueuedPromptIndex == index {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    TextField("Steer queued prompt", text: $steeringQueuedPromptText, axis: .vertical)
+                                        .textFieldStyle(.plain)
+                                        .font(.system(size: 13))
+                                        .lineSpacing(3)
+                                        .lineLimit(2...6)
+                                        .padding(10)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                .fill(Color.white.opacity(0.04))
+                                                .overlay {
+                                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                                                }
+                                        )
+
+                                    HStack(spacing: 8) {
+                                        Button("Cancel") {
+                                            cancelSteeringQueuedPrompt()
+                                        }
+                                        .buttonStyle(.plain)
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(.secondary)
+
+                                        Button("Save") {
+                                            saveSteeredQueuedPrompt()
+                                        }
+                                        .buttonStyle(.plain)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(.purple)
+                                        .disabled(steeringQueuedPromptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                    }
+                                }
+                                .padding(.leading, 16)
                             }
-                            .buttonStyle(.plain)
-                            .help("Remove from queue")
                         }
                     }
 
@@ -496,7 +599,7 @@ struct AgentNodePanel: View {
                 .foregroundStyle(.purple)
                 .frame(width: 20, height: 20)
 
-            Text(streamingAttributedText)
+            Text(conversation.streamingText)
                 .font(.system(size: 14))
                 .lineSpacing(3)
                 .textSelection(.enabled)
@@ -505,16 +608,6 @@ struct AgentNodePanel: View {
         }
         .padding(12)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
-    }
-
-    private var streamingAttributedText: AttributedString {
-        if let attributed = try? AttributedString(
-            markdown: conversation.streamingText,
-            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        ) {
-            return attributed
-        }
-        return AttributedString(conversation.streamingText)
     }
 
     private var isRecoverableError: Bool {
@@ -1079,6 +1172,24 @@ struct AgentNodePanel: View {
         !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !conversation.pendingAttachments.isEmpty
     }
 
+    private func beginSteeringQueuedPrompt(at index: Int) {
+        steeringQueuedPromptIndex = index
+        steeringQueuedPromptText = queuedPromptTextAt(index) ?? conversation.visibleQueuedPromptPreviews[index]
+    }
+
+    private func cancelSteeringQueuedPrompt() {
+        steeringQueuedPromptIndex = nil
+        steeringQueuedPromptText = ""
+    }
+
+    private func saveSteeredQueuedPrompt() {
+        guard let index = steeringQueuedPromptIndex else { return }
+        let prompt = steeringQueuedPromptText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else { return }
+        onSteerQueuedPrompt(index, prompt)
+        cancelSteeringQueuedPrompt()
+    }
+
     private func restoreInputFocusIfNeeded() {
         guard isSelected else { return }
         Task { @MainActor in
@@ -1086,14 +1197,11 @@ struct AgentNodePanel: View {
         }
     }
 
-    private func send() {
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        var attachments = conversation.pendingAttachments
-        guard !text.isEmpty || !attachments.isEmpty else { return }
-        inputText = ""
-        conversation.clearAttachments()
+    private func preparePromptSubmission(text rawText: String, attachments initialAttachments: [Attachment]) -> (prompt: String, attachments: [Attachment])? {
+        var attachments = initialAttachments
+        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty || !attachments.isEmpty else { return nil }
 
-        // Detect image file paths in the text and convert to attachments
         var promptLines: [String] = []
         for line in text.components(separatedBy: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1104,23 +1212,37 @@ struct AgentNodePanel: View {
             }
         }
 
+        let remainingText = promptLines
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
         let prompt: String
-        let remainingText = promptLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
         if remainingText.isEmpty && !attachments.isEmpty {
             prompt = "Analyze the attached image(s)."
         } else if remainingText.isEmpty {
-            return
+            return nil
         } else {
             prompt = remainingText
         }
 
+        return (prompt, attachments)
+    }
+
+    private func send() {
+        let currentInput = inputText
+        let currentAttachments = conversation.pendingAttachments
+        guard let submission = preparePromptSubmission(text: currentInput, attachments: currentAttachments) else { return }
+
+        inputText = ""
+        conversation.clearAttachments()
+
         // Handle slash commands (only if no attachments)
-        if attachments.isEmpty && prompt.hasPrefix("/") {
-            handleSlashCommand(prompt)
+        if submission.attachments.isEmpty && submission.prompt.hasPrefix("/") {
+            handleSlashCommand(submission.prompt)
             return
         }
 
-        onSend(prompt, attachments)
+        onSend(submission.prompt, submission.attachments)
     }
 
     private static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "tiff", "tif", "bmp"]
@@ -1182,8 +1304,13 @@ struct AgentNodePanel: View {
 
 // MARK: - Message Row
 
-struct MessageRow: View {
+@MainActor
+struct MessageRow: View, Equatable {
     let message: ConversationMessage
+
+    nonisolated static func == (lhs: MessageRow, rhs: MessageRow) -> Bool {
+        lhs.message == rhs.message
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -1512,7 +1639,7 @@ private struct InputBarView: View {
     }
 
     private var placeholder: String {
-        isStreaming ? "Add to queue..." : "Ask for follow-up changes or attach images"
+        return isStreaming ? "Add to queue..." : "Ask for follow-up changes or attach images"
     }
 
     var body: some View {
@@ -1650,207 +1777,25 @@ private struct PromptTextField: View {
     let onPaste: ([NSItemProvider]) -> Void
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            PromptTextEditorRepresentable(
-                text: $text,
-                isFocused: inputFocused.wrappedValue,
-                onSend: onSend,
-                onPaste: onPaste
-            )
-            .frame(minHeight: 24, maxHeight: 132)
-
-            if text.isEmpty {
-                Text(placeholder)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 1)
-                    .allowsHitTesting(false)
+        TextField(placeholder, text: $text, axis: .vertical)
+            .textFieldStyle(.plain)
+            .font(.system(size: 14))
+            .lineSpacing(3)
+            .lineLimit(2...8)
+            .focused(inputFocused)
+            .onKeyPress(.return, phases: .down) { keyPress in
+                if keyPress.modifiers.isEmpty {
+                    onSend()
+                    return .handled
+                }
+                return .ignored
             }
-        }
+            .onPasteCommand(of: [.image, .png, .jpeg, .gif, .tiff, .heic]) { providers in
+                onPaste(providers)
+            }
         .padding(.horizontal, 16)
         .padding(.top, 14)
         .padding(.bottom, 10)
-    }
-}
-
-private struct PromptTextEditorRepresentable: NSViewRepresentable {
-    @Binding var text: String
-    let isFocused: Bool
-    let onSend: () -> Void
-    let onPaste: ([NSItemProvider]) -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
-    }
-
-    func makeNSView(context: Context) -> PromptTextEditorContainerView {
-        let view = PromptTextEditorContainerView()
-        view.textView.delegate = context.coordinator
-        view.textView.string = text
-        view.textView.onSend = onSend
-        view.textView.onPasteProviders = onPaste
-        context.coordinator.containerView = view
-        return view
-    }
-
-    func updateNSView(_ nsView: PromptTextEditorContainerView, context: Context) {
-        context.coordinator.parent = self
-        context.coordinator.containerView = nsView
-        nsView.textView.onSend = onSend
-        nsView.textView.onPasteProviders = onPaste
-
-        if nsView.textView.string != text {
-            nsView.textView.string = text
-            nsView.invalidateIntrinsicContentSize()
-        }
-
-        if isFocused, nsView.window?.firstResponder !== nsView.textView {
-            DispatchQueue.main.async {
-                nsView.window?.makeFirstResponder(nsView.textView)
-            }
-        }
-    }
-
-    final class Coordinator: NSObject, NSTextViewDelegate {
-        var parent: PromptTextEditorRepresentable
-        weak var containerView: PromptTextEditorContainerView?
-
-        init(parent: PromptTextEditorRepresentable) {
-            self.parent = parent
-        }
-
-        func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
-            let newValue = textView.string
-
-            if parent.text != newValue {
-                parent.text = newValue
-            }
-
-            containerView?.invalidateIntrinsicContentSize()
-        }
-    }
-}
-
-private final class PromptTextEditorContainerView: NSView {
-    let textView: PromptTextEditorView
-
-    override var isFlipped: Bool { true }
-
-    override init(frame frameRect: NSRect) {
-        textView = PromptTextEditorView(frame: .zero, textContainer: nil)
-        super.init(frame: frameRect)
-
-        textView.autoresizingMask = [.width, .height]
-        textView.drawsBackground = false
-        textView.font = .systemFont(ofSize: 14)
-        textView.textColor = .labelColor
-        textView.isRichText = false
-        textView.importsGraphics = false
-        textView.isEditable = true
-        textView.isSelectable = true
-        textView.isHorizontallyResizable = false
-        textView.isVerticallyResizable = true
-        textView.minSize = NSSize(width: 0, height: 24)
-        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        textView.textContainerInset = NSSize(width: 0, height: 1)
-        textView.textContainer?.widthTracksTextView = true
-        textView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
-        textView.textContainer?.lineFragmentPadding = 0
-
-        addSubview(textView)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override func layout() {
-        super.layout()
-        textView.frame = bounds
-        invalidateIntrinsicContentSize()
-    }
-
-    override var intrinsicContentSize: NSSize {
-        guard let layoutManager = textView.layoutManager,
-              let textContainer = textView.textContainer
-        else {
-            return NSSize(width: NSView.noIntrinsicMetric, height: 24)
-        }
-
-        let availableWidth = max(bounds.width, 1)
-        textContainer.containerSize = NSSize(width: availableWidth, height: .greatestFiniteMagnitude)
-        layoutManager.ensureLayout(for: textContainer)
-
-        let lineHeight = textView.font.map { layoutManager.defaultLineHeight(for: $0) } ?? 17
-        let minimumHeight = ceil(lineHeight + textView.textContainerInset.height * 2)
-        let measuredHeight = ceil(layoutManager.usedRect(for: textContainer).height + textView.textContainerInset.height * 2)
-        let clampedHeight = min(132, max(minimumHeight, measuredHeight))
-
-        return NSSize(width: NSView.noIntrinsicMetric, height: clampedHeight)
-    }
-}
-
-private final class PromptTextEditorView: NSTextView {
-    var onSend: () -> Void = {}
-    var onPasteProviders: ([NSItemProvider]) -> Void = { _ in }
-
-    override func doCommand(by selector: Selector) {
-        let flags = (NSApp.currentEvent?.modifierFlags ?? []).intersection(.deviceIndependentFlagsMask)
-        let relevantFlags = flags.subtracting([.capsLock, .function, .numericPad])
-
-        switch selector {
-        case #selector(insertNewline(_:)):
-            if relevantFlags.isEmpty || relevantFlags == .command {
-                onSend()
-                return
-            }
-
-            if relevantFlags == .shift || relevantFlags == .option || relevantFlags == [.shift, .option] {
-                insertNewlineIgnoringFieldEditor(self)
-                return
-            }
-
-        case #selector(insertLineBreak(_:)):
-            insertNewlineIgnoringFieldEditor(self)
-            return
-
-        default:
-            break
-        }
-
-        super.doCommand(by: selector)
-    }
-
-    override func paste(_ sender: Any?) {
-        let pasteboard = NSPasteboard.general
-        let supportedImageTypes: [UTType] = [.png, .jpeg, .gif, .tiff, .heic, .image]
-
-        let imageProviders = (pasteboard.pasteboardItems ?? []).compactMap { item in
-            for type in supportedImageTypes {
-                guard let data = item.data(forType: NSPasteboard.PasteboardType(type.identifier)) else {
-                    continue
-                }
-
-                let provider = NSItemProvider()
-                provider.registerDataRepresentation(forTypeIdentifier: type.identifier, visibility: .all) { completion in
-                    completion(data, nil)
-                    return nil
-                }
-                return provider
-            }
-
-            return nil
-        }
-
-        if !imageProviders.isEmpty {
-            onPasteProviders(imageProviders)
-        }
-
-        if pasteboard.canReadObject(forClasses: [NSString.self], options: nil) {
-            super.paste(sender)
-        }
     }
 }
 

@@ -165,6 +165,20 @@ final class ProjectStateTests: XCTestCase {
         XCTAssertTrue(state.selectedConnectionIDs.isEmpty)
     }
 
+    @MainActor
+    func testSelectNodeSameSingleSelectionIsNoOp() throws {
+        let state = ProjectState()
+        let node = state.addNode(kind: .agent, title: "A", at: .zero)
+
+        state.selectedNodeIDs = [node.id]
+        state.selectedConnectionIDs = []
+
+        state.selectNode(node.id)
+
+        XCTAssertEqual(state.selectedNodeIDs, [node.id])
+        XCTAssertTrue(state.selectedConnectionIDs.isEmpty)
+    }
+
     // MARK: - selectAll
 
     @MainActor
@@ -368,6 +382,19 @@ final class ProjectStateTests: XCTestCase {
         state.clearDragStartPositions()
         XCTAssertTrue(state.dragStartPositions.isEmpty)
         XCTAssertTrue(onChangeCalled)
+    }
+
+    @MainActor
+    func testBringToFrontFrontmostNodeIsNoOp() throws {
+        let state = ProjectState()
+        state.addNode(kind: .agent, title: "A", at: .zero)
+        let frontmost = state.addNode(kind: .agent, title: "B", at: CGPoint(x: 200, y: 0))
+        let originalOrder = state.nodeZOrder
+
+        state.bringToFront(frontmost.id)
+
+        XCTAssertEqual(state.nodeZOrder, originalOrder)
+        XCTAssertEqual(state.nodeZOrder.last, frontmost.id)
     }
 
     // MARK: - Helpers

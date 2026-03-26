@@ -105,6 +105,8 @@ struct PersistedProjectData: Codable {
 
 @MainActor
 enum ConversationPersistence {
+    private static let maxPersistedMessages = 250
+
     private static var baseDir: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let dir = appSupport.appendingPathComponent("\(AppEnvironment.appSupportDirectoryName)/conversations", isDirectory: true)
@@ -123,7 +125,7 @@ enum ConversationPersistence {
                 PersistedConversation(
                     nodeID: nodeID,
                     sessionID: state.sessionID,
-                    messages: state.messages,
+                    messages: Array(state.messages.suffix(maxPersistedMessages)),
                     runtimeActivities: state.runtimeActivities,
                     totalCostUSD: state.totalCostUSD,
                     totalInputTokens: state.totalInputTokens,
