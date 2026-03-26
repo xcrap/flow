@@ -516,6 +516,7 @@ struct ToolCallGroupView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 

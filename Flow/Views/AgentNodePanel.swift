@@ -363,7 +363,11 @@ struct AgentNodePanel: View {
                 }
             }
             .onChange(of: conversation.streamingText) {
-                proxy.scrollTo("streaming", anchor: .bottom)
+                // Throttled: ScrollView coalesces rapid layout passes,
+                // but avoid redundant calls by only scrolling when visible.
+                if !conversation.streamingText.isEmpty {
+                    proxy.scrollTo("streaming", anchor: .bottom)
+                }
             }
         }
     }
@@ -699,148 +703,35 @@ struct AgentNodePanel: View {
     // MARK: - Input Bar
 
     private var inputBar: some View {
-        VStack(spacing: 0) {
-            // Attachment thumbnails strip
-            if !conversation.pendingAttachments.isEmpty {
-                attachmentStrip
-            }
-
-            TextField(conversation.isStreaming ? "Add to queue..." : "Ask for follow-up changes or attach images", text: $inputText, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.system(size: 14))
-                .lineSpacing(3)
-                .lineLimit(2...8)
-                .focused($inputFocused)
-                .onKeyPress(.return, phases: .down) { keyPress in
-                    if keyPress.modifiers.isEmpty {
-                        send()
-                        return .handled
-                    }
-                    return .ignored
-                }
-                .onPasteCommand(of: [.image, .png, .jpeg, .gif, .tiff, .heic]) { providers in
-                    handlePastedItems(providers)
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 10)
-
-            HStack(spacing: 6) {
-                // Paperclip attach button
-                Button {
-                    openFilePicker()
-                } label: {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .frame(width: 28, height: 24)
-                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
-                }
-                .buttonStyle(.plain)
-                .help("Attach images")
-
-                Menu {
-                    ForEach(providerOptions, id: \.id) { provider in
-                        Button {
-                            selectProvider(provider.id)
-                        } label: {
-                            if selectedProvider == provider.id {
-                                Label(provider.name, systemImage: "checkmark")
-                            } else {
-                                Text(provider.name)
-                            }
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: selectedProvider == "codex" ? "circle.hexagongrid" : "brain")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text(selectedProviderName)
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundStyle(selectedProvider == "codex" ? .green : .purple)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
-                }
-                .menuStyle(.borderlessButton)
-
-                Menu {
-                    ForEach(availableModels) { model in
-                        Button {
-                            selectedModel = model.id
-                            onModelChange(model.id)
-                        } label: {
-                            if model.id == selectedModel {
-                                Label(model.name, systemImage: "checkmark")
-                            } else {
-                                Text(model.name)
-                            }
-                        }
-                    }
-                } label: {
-                    Text(selectedModelName)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.55))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
-                }
-                .menuStyle(.borderlessButton)
-
-                Button {
-                    showSettings.toggle()
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(!systemPromptText.isEmpty || agentMode != .auto || agentAccess != .fullAccess || selectedEffort != "high" ? .purple : .white.opacity(0.45))
-                        .frame(width: 28, height: 24)
-                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
-                }
-                .buttonStyle(.plain)
-                .help("Settings")
-                .popover(isPresented: $showSettings) {
-                    settingsPopover
-                }
-
-                Spacer()
-
-                if conversation.isStreaming {
-                    Button {
-                        onCancel()
-                    } label: {
-                        Image(systemName: "stop.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundColor(.red)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Stop")
-                }
-
-                Button {
-                    send()
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(canSend ? Color.accentColor : .white.opacity(0.15))
-                }
-                .buttonStyle(.plain)
-                .disabled(!canSend)
-                .help(conversation.isStreaming ? "Queue prompt" : "Send")
-            }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 12)
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
-                }
+        InputBarView(
+            inputText: $inputText,
+            inputFocused: $inputFocused,
+            isStreaming: conversation.isStreaming,
+            hasAttachments: !conversation.pendingAttachments.isEmpty,
+            hasPendingInput: !conversation.pendingAttachments.isEmpty,
+            selectedProvider: selectedProvider,
+            selectedProviderName: selectedProviderName,
+            selectedModel: selectedModel,
+            selectedModelName: selectedModelName,
+            showSettings: $showSettings,
+            systemPromptText: systemPromptText,
+            agentMode: agentMode,
+            agentAccess: agentAccess,
+            selectedEffort: selectedEffort,
+            providerOptions: providerOptions,
+            availableModels: availableModels,
+            attachmentStrip: !conversation.pendingAttachments.isEmpty ? AnyView(attachmentStrip) : nil,
+            settingsPopover: AnyView(settingsPopover),
+            onSend: { send() },
+            onCancel: onCancel,
+            onSelectProvider: { selectProvider($0) },
+            onModelChange: { id in
+                selectedModel = id
+                onModelChange(id)
+            },
+            onOpenFilePicker: { openFilePicker() },
+            onPaste: { handlePastedItems($0) }
         )
-        .padding(.horizontal, 10)
-        .padding(.vertical, 10)
     }
 
     // MARK: - Attachment Strip
@@ -1452,5 +1343,201 @@ struct AttachmentThumbnail: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Isolated Input Bar (Performance)
+
+/// Extracted input bar view that isolates the TextField from the parent's @Observable
+/// conversation state. This prevents every keystroke from triggering a full
+/// AgentNodePanel re-render caused by the @Bindable conversation dependency chain.
+private struct InputBarView: View {
+    @Binding var inputText: String
+    var inputFocused: FocusState<Bool>.Binding
+    let isStreaming: Bool
+    let hasAttachments: Bool
+    let hasPendingInput: Bool
+    let selectedProvider: String
+    let selectedProviderName: String
+    let selectedModel: String
+    let selectedModelName: String
+    @Binding var showSettings: Bool
+    let systemPromptText: String
+    let agentMode: AgentMode
+    let agentAccess: AgentAccess
+    let selectedEffort: String
+    let providerOptions: [(id: String, name: String)]
+    let availableModels: [AIModel]
+    let attachmentStrip: AnyView?
+    let settingsPopover: AnyView
+    let onSend: () -> Void
+    let onCancel: () -> Void
+    let onSelectProvider: (String) -> Void
+    let onModelChange: (String) -> Void
+    let onOpenFilePicker: () -> Void
+    let onPaste: ([NSItemProvider]) -> Void
+
+    private var canSend: Bool {
+        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasPendingInput
+    }
+
+    private var placeholder: String {
+        isStreaming ? "Add to queue..." : "Ask for follow-up changes or attach images"
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if let attachmentStrip {
+                attachmentStrip
+            }
+
+            PromptTextField(text: $inputText, placeholder: placeholder, inputFocused: inputFocused, onSend: onSend, onPaste: onPaste)
+
+            HStack(spacing: 6) {
+                Button {
+                    onOpenFilePicker()
+                } label: {
+                    Image(systemName: "paperclip")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .frame(width: 28, height: 24)
+                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                }
+                .buttonStyle(.plain)
+                .help("Attach images")
+
+                Menu {
+                    ForEach(providerOptions, id: \.id) { provider in
+                        Button {
+                            onSelectProvider(provider.id)
+                        } label: {
+                            if selectedProvider == provider.id {
+                                Label(provider.name, systemImage: "checkmark")
+                            } else {
+                                Text(provider.name)
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: selectedProvider == "codex" ? "circle.hexagongrid" : "brain")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(selectedProviderName)
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundStyle(selectedProvider == "codex" ? .green : .purple)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                }
+                .menuStyle(.borderlessButton)
+
+                Menu {
+                    ForEach(availableModels) { model in
+                        Button {
+                            onModelChange(model.id)
+                        } label: {
+                            if model.id == selectedModel {
+                                Label(model.name, systemImage: "checkmark")
+                            } else {
+                                Text(model.name)
+                            }
+                        }
+                    }
+                } label: {
+                    Text(selectedModelName)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                }
+                .menuStyle(.borderlessButton)
+
+                Button {
+                    showSettings.toggle()
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(!systemPromptText.isEmpty || agentMode != .auto || agentAccess != .fullAccess || selectedEffort != "high" ? .purple : .white.opacity(0.45))
+                        .frame(width: 28, height: 24)
+                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                }
+                .buttonStyle(.plain)
+                .help("Settings")
+                .popover(isPresented: $showSettings) {
+                    settingsPopover
+                }
+
+                Spacer()
+
+                if isStreaming {
+                    Button {
+                        onCancel()
+                    } label: {
+                        Image(systemName: "stop.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Stop")
+                }
+
+                Button {
+                    onSend()
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(canSend ? Color.accentColor : .white.opacity(0.15))
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSend)
+                .help(isStreaming ? "Queue prompt" : "Send")
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                }
+        )
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+    }
+}
+
+/// Minimal TextField wrapper — only re-renders when text or placeholder changes.
+/// Fully isolated from conversation @Observable state.
+private struct PromptTextField: View {
+    @Binding var text: String
+    let placeholder: String
+    var inputFocused: FocusState<Bool>.Binding
+    let onSend: () -> Void
+    let onPaste: ([NSItemProvider]) -> Void
+
+    var body: some View {
+        TextField(placeholder, text: $text, axis: .vertical)
+            .textFieldStyle(.plain)
+            .font(.system(size: 14))
+            .lineSpacing(3)
+            .lineLimit(2...8)
+            .focused(inputFocused)
+            .onKeyPress(.return, phases: .down) { keyPress in
+                if keyPress.modifiers.isEmpty {
+                    onSend()
+                    return .handled
+                }
+                return .ignored
+            }
+            .onPasteCommand(of: [.image, .png, .jpeg, .gif, .tiff, .heic]) { providers in
+                onPaste(providers)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
     }
 }

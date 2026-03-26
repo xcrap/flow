@@ -44,6 +44,11 @@ public final class AppState {
         scheduleSave()
     }
 
+    public func moveProject(fromOffsets source: IndexSet, toOffset destination: Int) {
+        openProjects.move(fromOffsets: source, toOffset: destination)
+        scheduleSave()
+    }
+
     public func scheduleSave() {
         scheduledSaveTask?.cancel()
         scheduledSaveTask = Task { @MainActor [weak self] in

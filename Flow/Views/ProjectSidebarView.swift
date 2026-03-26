@@ -68,15 +68,29 @@ struct ProjectSidebarView: View {
         Color(red: 0.09, green: 0.09, blue: 0.10)
     }
 
+    @State private var draggingProjectID: UUID?
+
     private var projectSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionLabel("Projects")
 
-            LazyVStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
                 ForEach(appState.openProjects, id: \.project.id) { project in
                     projectRow(project)
+                        .scaleEffect(draggingProjectID == project.project.id ? 0.95 : 1.0)
+                        .opacity(draggingProjectID == project.project.id ? 0.3 : 1)
+                        .onDrag {
+                            draggingProjectID = project.project.id
+                            return NSItemProvider(object: project.project.id.uuidString as NSString)
+                        }
+                        .onDrop(of: [.text], delegate: ProjectReorderDelegate(
+                            item: project,
+                            appState: appState,
+                            draggingProjectID: $draggingProjectID
+                        ))
                 }
             }
+            .animation(.easeInOut(duration: 0.2), value: appState.openProjects.map(\.project.id))
         }
     }
 
@@ -376,4 +390,42 @@ struct ProjectSidebarView: View {
         let months = days / 30
         return "\(max(1, months))mo"
     }
+}
+
+// MARK: - Project Reorder Drop Delegate
+
+/// Live-reorder delegate: items animate into their new positions as you drag over them.
+private struct ProjectReorderDelegate: DropDelegate {
+    let item: ProjectState
+    let appState: AppState
+    @Binding var draggingProjectID: UUID?
+
+    func validateDrop(info: DropInfo) -> Bool {
+        draggingProjectID != nil
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard let draggingID = draggingProjectID,
+              draggingID != item.project.id,
+              let fromIndex = appState.openProjects.firstIndex(where: { $0.project.id == draggingID }),
+              let toIndex = appState.openProjects.firstIndex(where: { $0.project.id == item.project.id }),
+              fromIndex != toIndex
+        else { return }
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            appState.openProjects.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex)
+        }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggingProjectID = nil
+        appState.scheduleSave()
+        return true
+    }
+
+    func dropExited(info: DropInfo) {}
 }
