@@ -37,25 +37,10 @@ public struct ProjectCanvasView<NodeContent: View>: View {
             .gesture(canvasZoomGesture)
             .canvasEventMonitor(
                 onZoomScroll: { [projectState] delta, mouseLocation in
-                    // Cooldown: ignore rapid-fire scroll events to prevent bounce
-                    let now = CACurrentMediaTime()
-                    guard now - projectState.canvasState.lastZoomScrollTime > 0.25 else { return }
-                    projectState.canvasState.lastZoomScrollTime = now
-
                     let oldZoom = projectState.canvasState.zoom
-                    let newZoom = delta.y > 0
-                        ? CanvasState.nextZoomLevel(above: oldZoom)
-                        : CanvasState.nextZoomLevel(below: oldZoom)
-                    guard newZoom != oldZoom else { return }
-
-                    let offset = projectState.canvasState.offset
-
-                    // Instant snap — no animation avoids overlapping animation bounce
-                    projectState.canvasState.offset = CGPoint(
-                        x: mouseLocation.x - (mouseLocation.x - offset.x) * (newZoom / oldZoom),
-                        y: mouseLocation.y - (mouseLocation.y - offset.y) * (newZoom / oldZoom)
-                    )
-                    projectState.canvasState.zoom = newZoom
+                    let scaleFactor = max(0.01, 1.0 + Double(delta.y) * 0.01)
+                    projectState.canvasState.zoom(by: scaleFactor, around: mouseLocation)
+                    guard projectState.canvasState.zoom != oldZoom else { return }
                     projectState.onChange?()
                 },
                 onPanDelta: { [projectState] delta in
@@ -107,38 +92,13 @@ public struct ProjectCanvasView<NodeContent: View>: View {
                     zoomStart = projectState.canvasState.zoom
                 }
                 let baseZoom = zoomStart ?? projectState.canvasState.zoom
-                let oldZoom = projectState.canvasState.zoom
-                let newZoom = max(0.1, min(3.0, baseZoom * value.magnification))
-
-                let vp = projectState.canvasState.viewportSize
-                let cx = vp.width / 2
-                let cy = vp.height / 2
-                let offset = projectState.canvasState.offset
-                projectState.canvasState.offset = CGPoint(
-                    x: cx - (cx - offset.x) * (newZoom / oldZoom),
-                    y: cy - (cy - offset.y) * (newZoom / oldZoom)
+                projectState.canvasState.setZoom(
+                    baseZoom * value.magnification,
+                    around: projectState.canvasState.viewportCenter
                 )
-                projectState.canvasState.zoom = newZoom
             }
             .onEnded { _ in
-                // Only snap if a real pinch gesture occurred
                 guard zoomStart != nil else { return }
-
-                let oldZoom = projectState.canvasState.zoom
-                let snapped = CanvasState.snapZoom(oldZoom)
-                if snapped != oldZoom {
-                    let vp = projectState.canvasState.viewportSize
-                    let cx = vp.width / 2
-                    let cy = vp.height / 2
-                    let offset = projectState.canvasState.offset
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        projectState.canvasState.offset = CGPoint(
-                            x: cx - (cx - offset.x) * (snapped / oldZoom),
-                            y: cy - (cy - offset.y) * (snapped / oldZoom)
-                        )
-                        projectState.canvasState.zoom = snapped
-                    }
-                }
                 zoomStart = nil
                 projectState.onChange?()
             }
@@ -178,6 +138,28 @@ struct CanvasEventMonitor: ViewModifier {
     @State private var isPanning = false
     @State private var anchor = CanvasViewAnchor()
 
+    private static func eventIsWithinCanvas(_ event: NSEvent, anchor: CanvasViewAnchor) -> Bool {
+        guard let view = anchor.view,
+              let window = event.window,
+              window === view.window
+        else {
+            return false
+        }
+
+        let localPoint = view.convert(event.locationInWindow, from: nil)
+        guard view.bounds.contains(localPoint) else {
+            return false
+        }
+
+        return true
+    }
+
+    private static func canvasMouseLocation(for event: NSEvent, anchor: CanvasViewAnchor) -> CGPoint {
+        guard let view = anchor.view else { return .zero }
+        let viewLoc = view.convert(event.locationInWindow, from: nil)
+        return CGPoint(x: viewLoc.x, y: view.bounds.height - viewLoc.y)
+    }
+
     private func removeAllMonitors() {
         if let m = scrollMonitor { NSEvent.removeMonitor(m); scrollMonitor = nil }
         if let m = mouseDownMonitor { NSEvent.removeMonitor(m); mouseDownMonitor = nil }
@@ -193,26 +175,29 @@ struct CanvasEventMonitor: ViewModifier {
                 removeAllMonitors()
 
                 scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [anchor] event in
-                    if event.modifierFlags.contains(.command) {
-                        // Convert window coordinates to canvas-local (flipped Y for SwiftUI)
-                        var mousePos = CGPoint.zero
-                        if let view = anchor.view {
-                            let viewLoc = view.convert(event.locationInWindow, from: nil)
-                            mousePos = CGPoint(x: viewLoc.x, y: view.bounds.height - viewLoc.y)
-                        }
-                        onZoomScroll(CGPoint(x: 0, y: event.scrollingDeltaY), mousePos)
-                        return nil
-                    }
-                    return event
-                }
+                    let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                    guard flags.contains(.command) else { return event }
 
-                mouseDownMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { event in
-                    guard event.modifierFlags.contains(.command) else {
+                    guard Self.eventIsWithinCanvas(event, anchor: anchor) else { return event }
+
+                    let delta = event.scrollingDeltaY
+                    if delta == 0 {
                         return event
                     }
 
-                    // Consume the full command-drag sequence up front so text views
-                    // do not start their own drag/select tracking and then lose it mid-stream.
+                    let mousePos = Self.canvasMouseLocation(for: event, anchor: anchor)
+                    onZoomScroll(CGPoint(x: 0, y: delta), mousePos)
+                    return nil
+                }
+
+                mouseDownMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { event in
+                    guard event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command),
+                          Self.eventIsWithinCanvas(event, anchor: anchor) else {
+                        return event
+                    }
+
+                    // Consume the full command-drag sequence up front so every node
+                    // and text view yields cleanly to canvas pan.
                     isPanning = true
                     return nil
                 }

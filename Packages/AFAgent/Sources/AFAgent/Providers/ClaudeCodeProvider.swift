@@ -273,7 +273,7 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
             "--model", model,
         ]
 
-        if let effort, !effort.isEmpty {
+        if let effort = normalizedEffort(effort) {
             args += ["--effort", effort]
         }
 
@@ -416,6 +416,21 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
 
         default:
             return nil
+        }
+    }
+
+    private static func normalizedEffort(_ effort: String?) -> String? {
+        guard let effort else { return nil }
+
+        switch effort.lowercased() {
+        case "low", "medium", "high", "max":
+            return effort.lowercased()
+        case "xhigh":
+            return "max"
+        case "minimal", "none":
+            return "low"
+        default:
+            return "high"
         }
     }
 }

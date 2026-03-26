@@ -4,6 +4,9 @@ import AFCore
 @Observable
 @MainActor
 public final class CanvasState {
+    public static let minimumZoom: Double = 0.1
+    public static let maximumZoom: Double = 3.0
+
     public var offset: CGPoint = .zero
     public var zoom: Double = 1.0
     public var gridSize: Double = 20.0
@@ -16,29 +19,33 @@ public final class CanvasState {
     public var marqueeOrigin: CGPoint?
     public var marqueeRect: CGRect?
     public var viewportSize: CGSize = CGSize(width: 900, height: 700)
-    public var lastZoomScrollTime: CFTimeInterval = 0
-
-    /// Discrete zoom levels for crisp rendering on Retina displays.
-    public static let zoomLevels: [Double] = [
-        0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0,
-    ]
-
-    /// Returns the nearest discrete zoom level.
-    public static func snapZoom(_ value: Double) -> Double {
-        zoomLevels.min(by: { abs($0 - value) < abs($1 - value) }) ?? 1.0
-    }
-
-    /// Returns the next zoom level up from the current value, or the max.
-    public static func nextZoomLevel(above current: Double) -> Double {
-        zoomLevels.first(where: { $0 > current + 0.01 }) ?? zoomLevels.last!
-    }
-
-    /// Returns the next zoom level down from the current value, or the min.
-    public static func nextZoomLevel(below current: Double) -> Double {
-        zoomLevels.last(where: { $0 < current - 0.01 }) ?? zoomLevels.first!
-    }
 
     public init() {}
+
+    public static func clampedZoom(_ value: Double) -> Double {
+        max(minimumZoom, min(maximumZoom, value))
+    }
+
+    public var viewportCenter: CGPoint {
+        CGPoint(x: viewportSize.width / 2, y: viewportSize.height / 2)
+    }
+
+    public func setZoom(_ targetZoom: Double, around screenPoint: CGPoint) {
+        let oldZoom = zoom
+        let newZoom = Self.clampedZoom(targetZoom)
+        guard oldZoom > 0, newZoom != oldZoom else { return }
+
+        offset = CGPoint(
+            x: screenPoint.x - (screenPoint.x - offset.x) * (newZoom / oldZoom),
+            y: screenPoint.y - (screenPoint.y - offset.y) * (newZoom / oldZoom)
+        )
+        zoom = newZoom
+    }
+
+    public func zoom(by factor: Double, around screenPoint: CGPoint) {
+        guard factor.isFinite, factor > 0 else { return }
+        setZoom(zoom * factor, around: screenPoint)
+    }
 
     public func canvasToScreen(_ point: CGPoint) -> CGPoint {
         CGPoint(
@@ -55,7 +62,7 @@ public final class CanvasState {
     }
 
     public func center(on canvasPoint: CGPoint, in viewportSize: CGSize, zoom targetZoom: Double? = nil) {
-        let resolvedZoom = max(0.1, min(3.0, targetZoom ?? zoom))
+        let resolvedZoom = Self.clampedZoom(targetZoom ?? zoom)
 
         if targetZoom != nil {
             zoom = resolvedZoom

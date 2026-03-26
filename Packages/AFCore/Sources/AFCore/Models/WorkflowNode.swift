@@ -133,7 +133,7 @@ public struct NodeConfiguration: Codable, Sendable, Equatable {
         case providerID, modelID, effort, systemPrompt, temperature, maxTokens
         case language, script, conditionExpression, triggerType, cronExpression
         case transformExpression, toolName, toolParameters
-        case agentMode, agentAccess
+        case agentMode, agentAccess, contextWindowSize
     }
 
     public init(from decoder: Decoder) throws {
@@ -155,6 +155,7 @@ public struct NodeConfiguration: Codable, Sendable, Equatable {
 
         agentMode = try c.decodeIfPresent(AgentMode.self, forKey: .agentMode)
         agentAccess = try c.decodeIfPresent(AgentAccess.self, forKey: .agentAccess)
+        contextWindowSize = try c.decodeIfPresent(Int.self, forKey: .contextWindowSize)
 
         // Migrate from legacy triggerType when new fields are absent
         if agentMode == nil, agentAccess == nil, let legacy = triggerType {
@@ -195,6 +196,7 @@ public struct NodeConfiguration: Codable, Sendable, Equatable {
         try c.encodeIfPresent(toolParameters, forKey: .toolParameters)
         try c.encodeIfPresent(agentMode, forKey: .agentMode)
         try c.encodeIfPresent(agentAccess, forKey: .agentAccess)
+        try c.encodeIfPresent(contextWindowSize, forKey: .contextWindowSize)
 
         // Write legacy triggerType for backward compat
         let legacy: String? = {

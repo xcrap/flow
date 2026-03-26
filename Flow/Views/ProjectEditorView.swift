@@ -245,9 +245,9 @@ struct ProjectEditorView: View {
         case .tidyUp:
             tidyUp(project: project, viewportSize: CGSize(width: 800, height: 600))
         case .zoomIn:
-            project.canvasState.zoom = min(3.0, project.canvasState.zoom + 0.25)
+            zoomCanvas(project: project, by: 1.1)
         case .zoomOut:
-            project.canvasState.zoom = max(0.1, project.canvasState.zoom - 0.25)
+            zoomCanvas(project: project, by: 1 / 1.1)
         case .resetZoom:
             project.canvasState.resetZoom(in: canvasViewportSize)
         case .newProject:
@@ -275,6 +275,11 @@ struct ProjectEditorView: View {
 
     private func tidyUp(project: ProjectState, viewportSize: CGSize) {
         project.tidyUp(viewportSize: viewportSize)
+    }
+
+    private func zoomCanvas(project: ProjectState, by factor: Double) {
+        project.canvasState.zoom(by: factor, around: project.canvasState.viewportCenter)
+        project.onChange?()
     }
 
     // MARK: - Node Panels

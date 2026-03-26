@@ -135,7 +135,7 @@ private actor CodexSession {
             "model": model,
         ]
 
-        if let effort, !effort.isEmpty {
+        if let effort = Self.normalizedEffort(effort) {
             params["effort"] = effort
         }
 
@@ -276,6 +276,19 @@ private actor CodexSession {
     }
 
     private static let maxLineBufferSize = 1_048_576 // 1MB
+
+    private static func normalizedEffort(_ effort: String?) -> String? {
+        guard let effort else { return nil }
+
+        switch effort.lowercased() {
+        case "none", "minimal", "low", "medium", "high", "xhigh":
+            return effort.lowercased()
+        case "max":
+            return "xhigh"
+        default:
+            return "high"
+        }
+    }
 
     private func consume(fragment: String) {
         lineBuffer += fragment

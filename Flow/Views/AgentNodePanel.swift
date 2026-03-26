@@ -37,13 +37,6 @@ struct AgentNodePanel: View {
     @State private var isDragTargeted = false
     @FocusState private var inputFocused: Bool
 
-    private let efforts = [
-        ("low", "Low"),
-        ("medium", "Medium"),
-        ("high", "High"),
-        ("max", "Max"),
-    ]
-
     init(
         node: WorkflowNode,
         nodeNumber: Int? = nil,
@@ -89,7 +82,7 @@ struct AgentNodePanel: View {
 
         _selectedProvider = State(initialValue: provider)
         _selectedModel = State(initialValue: finalModel)
-        _selectedEffort = State(initialValue: node.configuration.effort ?? "high")
+        _selectedEffort = State(initialValue: Self.normalizedEffort(node.configuration.effort ?? "high", for: provider))
         _systemPromptText = State(initialValue: node.configuration.systemPrompt ?? "")
         _agentMode = State(initialValue: node.configuration.resolvedMode)
         _agentAccess = State(initialValue: node.configuration.resolvedAccess)
@@ -148,10 +141,11 @@ struct AgentNodePanel: View {
             selectedProvider = provider
             let models = availableModels(for: provider)
             selectedModel = node.configuration.modelID ?? models.first?.id ?? "sonnet"
-            selectedEffort = node.configuration.effort ?? "high"
+            selectedEffort = Self.normalizedEffort(node.configuration.effort ?? "high", for: provider)
             systemPromptText = node.configuration.systemPrompt ?? ""
             agentMode = node.configuration.resolvedMode
             agentAccess = node.configuration.resolvedAccess
+            selectedContextWindow = node.configuration.contextWindowSize
         }
     }
 
@@ -189,6 +183,25 @@ struct AgentNodePanel: View {
         availableModels.first(where: { $0.id == selectedModel })?.name ?? selectedModel
     }
 
+    private var effortOptions: [(id: String, name: String)] {
+        switch selectedProvider {
+        case "codex":
+            return [
+                ("low", "Low"),
+                ("medium", "Medium"),
+                ("high", "High"),
+                ("xhigh", "Max"),
+            ]
+        default:
+            return [
+                ("low", "Low"),
+                ("medium", "Medium"),
+                ("high", "High"),
+                ("max", "Max"),
+            ]
+        }
+    }
+
     private func availableModels(for providerID: String) -> [AIModel] {
         let models = providerRegistry.provider(for: providerID)?.availableModels ?? []
         return models.isEmpty ? Self.fallbackModels(for: providerID) : models
@@ -210,6 +223,33 @@ struct AgentNodePanel: View {
         }
     }
 
+    private static func normalizedEffort(_ effort: String, for providerID: String) -> String {
+        let normalized = effort.lowercased()
+
+        switch providerID {
+        case "codex":
+            switch normalized {
+            case "none", "minimal", "low", "medium", "high", "xhigh":
+                return normalized
+            case "max":
+                return "xhigh"
+            default:
+                return "high"
+            }
+        default:
+            switch normalized {
+            case "low", "medium", "high", "max":
+                return normalized
+            case "xhigh":
+                return "max"
+            case "minimal", "none":
+                return "low"
+            default:
+                return "high"
+            }
+        }
+    }
+
     private func selectProvider(_ providerID: String) {
         selectedProvider = providerID
         onProviderChange(providerID)
@@ -219,6 +259,12 @@ struct AgentNodePanel: View {
         if let resolvedModel, resolvedModel != selectedModel {
             selectedModel = resolvedModel
             onModelChange(resolvedModel)
+        }
+
+        let resolvedEffort = Self.normalizedEffort(selectedEffort, for: providerID)
+        if resolvedEffort != selectedEffort {
+            selectedEffort = resolvedEffort
+            onEffortChange(resolvedEffort)
         }
     }
 
@@ -454,6 +500,7 @@ struct AgentNodePanel: View {
                 .font(.system(size: 14))
                 .lineSpacing(3)
                 .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(12)
@@ -487,6 +534,8 @@ struct AgentNodePanel: View {
                 Text(error)
                     .font(.system(size: 13))
                     .foregroundStyle(.red)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
@@ -558,6 +607,25 @@ struct AgentNodePanel: View {
         return conversation.reportedContextWindow ?? selectedModelContextWindow
     }
 
+    private var automaticContextWindow: Int? {
+        conversation.reportedContextWindow
+            ?? availableModels.first(where: { $0.id == selectedModel })?.contextWindow
+    }
+
+    private var contextWindowOptions: [Int] {
+        let model = availableModels.first(where: { $0.id == selectedModel })
+        var options = Set(model?.availableContextWindows ?? [])
+
+        if let automaticContextWindow {
+            options.insert(automaticContextWindow)
+        }
+        if let selectedContextWindow {
+            options.insert(selectedContextWindow)
+        }
+
+        return options.sorted()
+    }
+
     private var usagePercent: Double? {
         guard let contextLimit = contextLimitForDisplay,
               contextLimit > 0,
@@ -593,7 +661,7 @@ struct AgentNodePanel: View {
             return nil
         }
 
-        return "Current turn \(formatTokenCount(currentContextTokens)) of \(formatTokenCount(contextLimit)) (\(usagePercentLabel))"
+        return "Current turn \(formatExactTokenCount(currentContextTokens)) of \(formatExactTokenCount(contextLimit)) tokens (\(usagePercentLabel))"
     }
 
     @ViewBuilder
@@ -676,6 +744,10 @@ struct AgentNodePanel: View {
         default:
             return "\(count)"
         }
+    }
+
+    private func formatExactTokenCount(_ count: Int) -> String {
+        count.formatted(.number.grouping(.automatic))
     }
 
     // MARK: - Input Bar
@@ -819,7 +891,7 @@ struct AgentNodePanel: View {
                 Text("Effort")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
-                ForEach(efforts, id: \.0) { id, name in
+                ForEach(effortOptions, id: \.0) { id, name in
                     Button {
                         selectedEffort = id
                         onEffortChange(id)
@@ -919,12 +991,30 @@ struct AgentNodePanel: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
 
-                let model = availableModels.first(where: { $0.id == selectedModel })
-                let options = model?.availableContextWindows ?? [200_000]
-                let defaultWindow = model?.contextWindow ?? 200_000
+                if let automaticContextWindow {
+                    Button {
+                        selectedContextWindow = nil
+                        onContextWindowChange(nil)
+                    } label: {
+                        HStack(spacing: 8) {
+                            if selectedContextWindow == nil {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .frame(width: 16)
+                            } else {
+                                Spacer().frame(width: 16)
+                            }
+                            Text("Automatic (\(Self.formatContextWindow(automaticContextWindow)))")
+                                .font(.system(size: 14))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
 
-                ForEach(options, id: \.self) { size in
-                    let isSelected = (selectedContextWindow ?? defaultWindow) == size
+                ForEach(contextWindowOptions, id: \.self) { size in
+                    let isSelected = selectedContextWindow == size
                     Button {
                         selectedContextWindow = size
                         onContextWindowChange(size)
@@ -937,7 +1027,7 @@ struct AgentNodePanel: View {
                             } else {
                                 Spacer().frame(width: 16)
                             }
-                            Text(Self.formatContextWindow(size) + (size == defaultWindow ? " (default)" : ""))
+                            Text(Self.formatContextWindow(size))
                                 .font(.system(size: 14))
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -962,18 +1052,27 @@ struct AgentNodePanel: View {
             }
         }
         .padding(14)
-        .frame(width: 220)
+        .frame(width: 250)
     }
 
     private static func formatContextWindow(_ tokens: Int) -> String {
         if tokens >= 1_000_000 {
-            let m = Double(tokens) / 1_000_000
-            return m.truncatingRemainder(dividingBy: 1) == 0
-                ? "\(Int(m))M"
-                : String(format: "%.1fM", m)
-        } else {
-            return "\(tokens / 1_000)K"
+            let millions = Double(tokens) / 1_000_000
+            let rounded = (millions * 10).rounded() / 10
+            return rounded.rounded(.towardZero) == rounded
+                ? "\(Int(rounded))M"
+                : String(format: "%.1fM", rounded)
         }
+
+        if tokens >= 1_000 {
+            let thousands = Double(tokens) / 1_000
+            let rounded = thousands.rounded()
+            return rounded.rounded(.towardZero) == rounded
+                ? "\(Int(rounded))K"
+                : String(format: "%.1fK", rounded)
+        }
+
+        return "\(tokens)"
     }
 
     private var canSend: Bool {
@@ -1060,8 +1159,9 @@ struct AgentNodePanel: View {
             }
         case "/effort":
             if let effort = arg {
-                selectedEffort = effort
-                onEffortChange(effort)
+                let resolvedEffort = Self.normalizedEffort(effort, for: selectedProvider)
+                selectedEffort = resolvedEffort
+                onEffortChange(resolvedEffort)
             }
         case "/mode":
             if let mode = arg, let parsed = AgentMode(rawValue: mode) {
@@ -1145,11 +1245,15 @@ struct MessageRow: View {
                                 .font(.system(size: 14))
                                 .lineSpacing(3)
                                 .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         } else {
                             Text(md)
                                 .font(.system(size: 14))
                                 .lineSpacing(3)
                                 .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     case .codeBlock(let lang, let code):
                         VStack(alignment: .leading, spacing: 0) {
@@ -1250,8 +1354,9 @@ struct MessageRow: View {
                 Text(resultContent)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
-                    .lineLimit(5)
                     .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
         case .image(let data, _):
@@ -1535,7 +1640,7 @@ private struct InputBarView: View {
     }
 }
 
-/// Minimal TextField wrapper — only re-renders when text or placeholder changes.
+/// AppKit-backed multiline composer that keeps send/newline behavior predictable on macOS.
 /// Fully isolated from conversation @Observable state.
 private struct PromptTextField: View {
     @Binding var text: String
@@ -1545,25 +1650,207 @@ private struct PromptTextField: View {
     let onPaste: ([NSItemProvider]) -> Void
 
     var body: some View {
-        TextField(placeholder, text: $text, axis: .vertical)
-            .textFieldStyle(.plain)
-            .font(.system(size: 14))
-            .lineSpacing(3)
-            .lineLimit(2...8)
-            .focused(inputFocused)
-            .onKeyPress(.return, phases: .down) { keyPress in
-                if keyPress.modifiers.isEmpty {
-                    onSend()
-                    return .handled
+        ZStack(alignment: .topLeading) {
+            PromptTextEditorRepresentable(
+                text: $text,
+                isFocused: inputFocused.wrappedValue,
+                onSend: onSend,
+                onPaste: onPaste
+            )
+            .frame(minHeight: 24, maxHeight: 132)
+
+            if text.isEmpty {
+                Text(placeholder)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 1)
+                    .allowsHitTesting(false)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
+    }
+}
+
+private struct PromptTextEditorRepresentable: NSViewRepresentable {
+    @Binding var text: String
+    let isFocused: Bool
+    let onSend: () -> Void
+    let onPaste: ([NSItemProvider]) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeNSView(context: Context) -> PromptTextEditorContainerView {
+        let view = PromptTextEditorContainerView()
+        view.textView.delegate = context.coordinator
+        view.textView.string = text
+        view.textView.onSend = onSend
+        view.textView.onPasteProviders = onPaste
+        context.coordinator.containerView = view
+        return view
+    }
+
+    func updateNSView(_ nsView: PromptTextEditorContainerView, context: Context) {
+        context.coordinator.parent = self
+        context.coordinator.containerView = nsView
+        nsView.textView.onSend = onSend
+        nsView.textView.onPasteProviders = onPaste
+
+        if nsView.textView.string != text {
+            nsView.textView.string = text
+            nsView.invalidateIntrinsicContentSize()
+        }
+
+        if isFocused, nsView.window?.firstResponder !== nsView.textView {
+            DispatchQueue.main.async {
+                nsView.window?.makeFirstResponder(nsView.textView)
+            }
+        }
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: PromptTextEditorRepresentable
+        weak var containerView: PromptTextEditorContainerView?
+
+        init(parent: PromptTextEditorRepresentable) {
+            self.parent = parent
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            let newValue = textView.string
+
+            if parent.text != newValue {
+                parent.text = newValue
+            }
+
+            containerView?.invalidateIntrinsicContentSize()
+        }
+    }
+}
+
+private final class PromptTextEditorContainerView: NSView {
+    let textView: PromptTextEditorView
+
+    override var isFlipped: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        textView = PromptTextEditorView(frame: .zero, textContainer: nil)
+        super.init(frame: frameRect)
+
+        textView.autoresizingMask = [.width, .height]
+        textView.drawsBackground = false
+        textView.font = .systemFont(ofSize: 14)
+        textView.textColor = .labelColor
+        textView.isRichText = false
+        textView.importsGraphics = false
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.minSize = NSSize(width: 0, height: 24)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainerInset = NSSize(width: 0, height: 1)
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.lineFragmentPadding = 0
+
+        addSubview(textView)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        textView.frame = bounds
+        invalidateIntrinsicContentSize()
+    }
+
+    override var intrinsicContentSize: NSSize {
+        guard let layoutManager = textView.layoutManager,
+              let textContainer = textView.textContainer
+        else {
+            return NSSize(width: NSView.noIntrinsicMetric, height: 24)
+        }
+
+        let availableWidth = max(bounds.width, 1)
+        textContainer.containerSize = NSSize(width: availableWidth, height: .greatestFiniteMagnitude)
+        layoutManager.ensureLayout(for: textContainer)
+
+        let lineHeight = textView.font.map { layoutManager.defaultLineHeight(for: $0) } ?? 17
+        let minimumHeight = ceil(lineHeight + textView.textContainerInset.height * 2)
+        let measuredHeight = ceil(layoutManager.usedRect(for: textContainer).height + textView.textContainerInset.height * 2)
+        let clampedHeight = min(132, max(minimumHeight, measuredHeight))
+
+        return NSSize(width: NSView.noIntrinsicMetric, height: clampedHeight)
+    }
+}
+
+private final class PromptTextEditorView: NSTextView {
+    var onSend: () -> Void = {}
+    var onPasteProviders: ([NSItemProvider]) -> Void = { _ in }
+
+    override func doCommand(by selector: Selector) {
+        let flags = (NSApp.currentEvent?.modifierFlags ?? []).intersection(.deviceIndependentFlagsMask)
+        let relevantFlags = flags.subtracting([.capsLock, .function, .numericPad])
+
+        switch selector {
+        case #selector(insertNewline(_:)):
+            if relevantFlags.isEmpty || relevantFlags == .command {
+                onSend()
+                return
+            }
+
+            if relevantFlags == .shift || relevantFlags == .option || relevantFlags == [.shift, .option] {
+                insertNewlineIgnoringFieldEditor(self)
+                return
+            }
+
+        case #selector(insertLineBreak(_:)):
+            insertNewlineIgnoringFieldEditor(self)
+            return
+
+        default:
+            break
+        }
+
+        super.doCommand(by: selector)
+    }
+
+    override func paste(_ sender: Any?) {
+        let pasteboard = NSPasteboard.general
+        let supportedImageTypes: [UTType] = [.png, .jpeg, .gif, .tiff, .heic, .image]
+
+        let imageProviders = (pasteboard.pasteboardItems ?? []).compactMap { item in
+            for type in supportedImageTypes {
+                guard let data = item.data(forType: NSPasteboard.PasteboardType(type.identifier)) else {
+                    continue
                 }
-                return .ignored
+
+                let provider = NSItemProvider()
+                provider.registerDataRepresentation(forTypeIdentifier: type.identifier, visibility: .all) { completion in
+                    completion(data, nil)
+                    return nil
+                }
+                return provider
             }
-            .onPasteCommand(of: [.image, .png, .jpeg, .gif, .tiff, .heic]) { providers in
-                onPaste(providers)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
-            .padding(.bottom, 10)
+
+            return nil
+        }
+
+        if !imageProviders.isEmpty {
+            onPasteProviders(imageProviders)
+        }
+
+        if pasteboard.canReadObject(forClasses: [NSString.self], options: nil) {
+            super.paste(sender)
+        }
     }
 }
 
@@ -1703,7 +1990,7 @@ private struct VerticalOnlyScrollView<Content: View>: NSViewRepresentable {
             // (outer or nested from .textSelection(.enabled)).
             // Uses AppKit hit testing instead of coordinate conversion to
             // correctly handle .scaleEffect() canvas zoom transforms.
-            weak var weakSV = scrollView
+            let weakSV: NSScrollView? = scrollView
             eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
                 guard let sv = weakSV else { return event }
                 guard let window = event.window, window === sv.window else { return event }
@@ -1750,8 +2037,10 @@ private struct VerticalOnlyScrollView<Content: View>: NSViewRepresentable {
                     ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
                     scrollView.contentView.animator().setBoundsOrigin(point)
                 } completionHandler: { [weak self] in
-                    self?.isAnimatingScroll = false
-                    self?.isAtBottom = true
+                    DispatchQueue.main.async {
+                        self?.isAnimatingScroll = false
+                        self?.isAtBottom = true
+                    }
                 }
             } else {
                 scrollView.contentView.scroll(to: point)

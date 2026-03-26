@@ -24,6 +24,13 @@ struct FlowApp: App {
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             guard let chars = event.charactersIgnoringModifiers else { return event }
 
+            if flags == [.command, .shift], chars == "c" {
+                if let project = appState.activeProject, !project.nodes.isEmpty {
+                    project.fitToScreen(viewportSize: project.canvasState.viewportSize)
+                }
+                return nil
+            }
+
             // ⌘ shortcuts (Command only, no other modifiers)
             if flags == .command {
                 switch chars {
@@ -40,12 +47,6 @@ struct FlowApp: App {
                             project.canvasState.resetZoom(in: project.canvasState.viewportSize)
                             project.onChange?()
                         }
-                    }
-                    return nil
-
-                case "c":
-                    if let project = appState.activeProject, !project.nodes.isEmpty {
-                        project.fitToScreen(viewportSize: project.canvasState.viewportSize)
                     }
                     return nil
 

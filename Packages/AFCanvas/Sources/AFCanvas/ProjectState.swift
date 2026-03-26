@@ -215,7 +215,7 @@ public final class ProjectState {
         let availW = max(1, viewportSize.width - padding * 2)
         let availH = max(1, viewportSize.height - padding * 2)
         let rawZoom = min(availW / contentWidth, availH / contentHeight)
-        let newZoom = CanvasState.snapZoom(min(rawZoom, 1.0))
+        let newZoom = CanvasState.clampedZoom(min(rawZoom, 1.0))
 
         let cx = (minX + maxX) / 2
         let cy = (minY + maxY) / 2

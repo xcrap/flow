@@ -38,9 +38,10 @@ struct SettingsView: View {
         ("Zoom In", "⌘+"),
         ("Zoom Out", "⌘−"),
         ("Reset Zoom", "⌘0"),
-        ("Fit to Screen", "⌘C"),
+        ("Fit to Screen", "⇧⌘C"),
         ("Tidy Up", "⌘G"),
-        ("Send Message", "⌘↩"),
+        ("Send Message", "↩ / ⌘↩"),
+        ("Insert Line Break", "⇧↩"),
     ]
 
     var body: some View {
@@ -257,4 +258,3 @@ struct SettingsView: View {
         .padding(.vertical, 8)
     }
 }
-

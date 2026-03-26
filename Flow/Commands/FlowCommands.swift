@@ -85,14 +85,14 @@ struct FlowCommands: Commands {
         CommandGroup(after: .toolbar) {
             Button("Zoom In") {
                 if let project = appState.activeProject {
-                    project.canvasState.zoom = min(3.0, project.canvasState.zoom + 0.25)
+                    zoom(project, by: 1.1)
                 }
             }
             .keyboardShortcut(KeyEquivalent("+"), modifiers: .command)
 
             Button("Zoom Out") {
                 if let project = appState.activeProject {
-                    project.canvasState.zoom = max(0.1, project.canvasState.zoom - 0.25)
+                    zoom(project, by: 1 / 1.1)
                 }
             }
             .keyboardShortcut("-", modifiers: .command)
@@ -107,7 +107,7 @@ struct FlowCommands: Commands {
             Button("Fit to Screen") {
                 fitToScreen()
             }
-            .keyboardShortcut("c", modifiers: .command)
+            .keyboardShortcut("c", modifiers: [.command, .shift])
 
             Button("Tidy Up") {
                 tidyUp()
@@ -125,6 +125,11 @@ struct FlowCommands: Commands {
     private func tidyUp() {
         guard let project = appState.activeProject else { return }
         project.tidyUp(viewportSize: project.canvasState.viewportSize)
+    }
+
+    private func zoom(_ project: ProjectState, by factor: Double) {
+        project.canvasState.zoom(by: factor, around: project.canvasState.viewportCenter)
+        project.onChange?()
     }
 
     private func duplicateSelectedNodes() {
