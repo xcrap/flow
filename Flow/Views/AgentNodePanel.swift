@@ -102,6 +102,7 @@ struct AgentNodePanel: View {
             inputBar
         }
         .frame(width: node.position.width, height: node.position.height)
+        .geometryGroup()
         .background {
             RoundedRectangle(cornerRadius: 14)
                 .fill(Color(red: 0.11, green: 0.11, blue: 0.12))
@@ -300,7 +301,7 @@ struct AgentNodePanel: View {
     private var messagesArea: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 16) {
                     if conversation.messages.isEmpty &&
                         conversation.recentRuntimeActivities.isEmpty &&
                         !conversation.isStreaming
@@ -333,6 +334,17 @@ struct AgentNodePanel: View {
                     }
                 }
                 .padding(16)
+            }
+            .onAppear {
+                if conversation.isStreaming {
+                    if !conversation.streamingText.isEmpty {
+                        proxy.scrollTo("streaming", anchor: .bottom)
+                    } else if let lastGroup = groupedMessages.last {
+                        proxy.scrollTo(lastGroup.id, anchor: .bottom)
+                    }
+                } else if let lastGroup = groupedMessages.last {
+                    proxy.scrollTo(lastGroup.id, anchor: .bottom)
+                }
             }
             .onChange(of: conversation.messages.count) {
                 withAnimation(.easeOut(duration: 0.15)) {
@@ -699,8 +711,12 @@ struct AgentNodePanel: View {
                 .lineSpacing(3)
                 .lineLimit(2...8)
                 .focused($inputFocused)
-                .onSubmit {
-                    send()
+                .onKeyPress(.return, phases: .down) { keyPress in
+                    if keyPress.modifiers.isEmpty {
+                        send()
+                        return .handled
+                    }
+                    return .ignored
                 }
                 .onPasteCommand(of: [.image, .png, .jpeg, .gif, .tiff, .heic]) { providers in
                     handlePastedItems(providers)

@@ -72,7 +72,7 @@ struct ConversationView: View {
             // Messages
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 12) {
                         if !conversationState.recentRuntimeActivities.isEmpty {
                             RuntimeActivityList(activities: conversationState.recentRuntimeActivities)
                         }
@@ -100,6 +100,11 @@ struct ConversationView: View {
                         }
                     }
                     .padding(16)
+                }
+                .onAppear {
+                    if let lastGroup = groupedMessages.last {
+                        proxy.scrollTo(lastGroup.id, anchor: .bottom)
+                    }
                 }
                 .onChange(of: conversationState.messages.count) {
                     withAnimation {
@@ -172,8 +177,12 @@ struct ConversationView: View {
                     .textFieldStyle(.plain)
                     .lineLimit(1...8)
                     .focused($inputFocused)
-                    .onSubmit {
-                        sendMessage()
+                    .onKeyPress(.return, phases: .down) { keyPress in
+                        if keyPress.modifiers.isEmpty {
+                            sendMessage()
+                            return .handled
+                        }
+                        return .ignored
                     }
 
                 Button {

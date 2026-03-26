@@ -657,8 +657,8 @@ struct ProjectEditorView: View {
             }
         }
 
-        // Git status
-        if activeGit.isGitRepo {
+        // Git status — only visible when there are uncommitted changes
+        if activeGit.isGitRepo, activeGit.hasChanges {
             ToolbarItemGroup(placement: .automatic) {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.triangle.branch")
@@ -668,14 +668,12 @@ struct ProjectEditorView: View {
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
 
-                    if activeGit.statusFileCount > 0 {
-                        Text("\(activeGit.statusFileCount)")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(.orange, in: Capsule())
-                    }
+                    Text("\(activeGit.statusFileCount)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(.orange, in: Capsule())
                 }
 
                 Button {
@@ -683,7 +681,6 @@ struct ProjectEditorView: View {
                 } label: {
                     Label("Commit", systemImage: "checkmark.circle")
                 }
-                .disabled(activeGit.statusFileCount == 0)
 
                 Button {
                     if let id = activeProject?.project.id {
@@ -691,14 +688,6 @@ struct ProjectEditorView: View {
                     }
                 } label: {
                     Label("Push", systemImage: "arrow.up.circle")
-                }
-
-                Button {
-                    if let id = activeProject?.project.id {
-                        gitStatus.forceRefresh(projectID: id)
-                    }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
                 }
             }
         }

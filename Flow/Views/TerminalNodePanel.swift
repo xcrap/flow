@@ -18,6 +18,7 @@ struct TerminalNodePanel: View {
             terminalArea
         }
         .frame(width: node.position.width, height: node.position.height)
+        .geometryGroup()
         .background {
             RoundedRectangle(cornerRadius: 14)
                 .fill(Color(red: 0.11, green: 0.11, blue: 0.12))

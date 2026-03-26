@@ -126,72 +126,38 @@ struct ProjectSidebarView: View {
     private func projectRow(_ project: ProjectState) -> some View {
         let isSelected = appState.activeProjectID == project.project.id
         let agentCount = project.nodes.values.filter { $0.kind == .agent }.count
-        let git = gitStatus.info[project.project.id]
 
         return Button {
             appState.activeProjectID = project.project.id
             appState.sidebarSelection = .project(project.project.id)
         } label: {
-            HStack(alignment: .top, spacing: 12) {
-                RoundedRectangle(cornerRadius: 999, style: .continuous)
-                    .fill(isSelected ? Color.white.opacity(0.9) : Color.white.opacity(0.12))
-                    .frame(width: 3, height: 44)
-                    .padding(.top, 2)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(project.project.name)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white.opacity(isSelected ? 0.98 : 0.9))
-                            .lineLimit(1)
-
-                        Spacer()
-
-                        Text(agentCount == 1 ? "1 agent" : "\(agentCount) agents")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.56))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if agentCount > 0 {
+                        Text("\(agentCount)")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.5))
                     }
 
-                    HStack(spacing: 8) {
-                        Text(shortenPath(project.project.rootPath))
-                            .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.52))
-                            .lineLimit(1)
-
-                        Spacer()
-
-                        if let git, !git.branch.isEmpty {
-                            HStack(spacing: 6) {
-                                Image(systemName: "arrow.triangle.branch")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.44))
-
-                                Text(git.branch)
-                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                    .foregroundStyle(.white.opacity(0.6))
-                                    .lineLimit(1)
-
-                                if git.hasChanges {
-                                    HStack(spacing: 3) {
-                                        if git.additions > 0 {
-                                            Text("+\(git.additions)")
-                                                .foregroundStyle(Color(red: 0.30, green: 0.78, blue: 0.42))
-                                        }
-                                        if git.deletions > 0 {
-                                            Text("-\(git.deletions)")
-                                                .foregroundStyle(Color(red: 0.95, green: 0.35, blue: 0.35))
-                                        }
-                                    }
-                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                }
-                            }
-                        }
-                    }
+                    Text(project.project.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(isSelected ? 0.98 : 0.9))
+                        .lineLimit(1)
                 }
+
+                Text(shortenPath(project.project.rootPath))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.52))
+                    .lineLimit(1)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(cardBackground(isSelected: isSelected))
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.white.opacity(0.08))
+                }
+            }
             .onAppear {
                 gitStatus.startPolling(projectID: project.project.id, rootPath: project.project.rootPath)
             }

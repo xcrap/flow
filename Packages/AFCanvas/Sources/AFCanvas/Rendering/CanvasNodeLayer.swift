@@ -81,15 +81,15 @@ public struct CanvasNodeLayer: View {
             .id(node.id)
             .overlay(alignment: .top) {
                 HStack(spacing: 0) {
-                    // Left: drag handle + hover area
+                    // Draggable across full header except close-button area
                     Color.clear
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(Rectangle())
-                        .highPriorityGesture(nodeDragGesture(for: node.id))
+                        .gesture(nodeDragGesture(for: node.id))
 
-                    // Right: not interactive (pickers underneath handle clicks)
+                    // Pass-through for close button (right edge)
                     Color.clear
-                        .frame(width: node.position.width * 0.45)
+                        .frame(width: 44)
                         .allowsHitTesting(false)
                 }
                 .frame(height: 42)
