@@ -11,6 +11,7 @@ struct ProjectEditorView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("gridVisible") private var gridVisible = true
     @Binding var sidebarVisible: Bool
+    @Binding var settingsVisible: Bool
     @Binding var showCommandPalette: Bool
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showNodePicker = false
@@ -38,6 +39,7 @@ struct ProjectEditorView: View {
     }
 
     var body: some View {
+        HStack(spacing: 0) {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             ProjectSidebarView(
                 activeProject: activeProject,
@@ -129,6 +131,15 @@ struct ProjectEditorView: View {
         .onDisappear {
             flushAllPersistence()
         }
+
+        if settingsVisible {
+            Divider()
+            SettingsView(onClose: { settingsVisible = false })
+                .frame(width: 420)
+                .transition(.move(edge: .trailing))
+        }
+        }
+        .animation(.smooth, value: settingsVisible)
     }
 
     // MARK: - Provider Setup
@@ -242,7 +253,7 @@ struct ProjectEditorView: View {
         case .toggleSidebar:
             NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil)
         case .openSettings:
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            settingsVisible.toggle()
         }
     }
 

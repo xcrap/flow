@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct SettingsView: View {
+    var onClose: (() -> Void)? = nil
+
     @AppStorage("defaultProvider") private var defaultProvider = "claude"
     @AppStorage("defaultModel") private var defaultModel = "sonnet"
     @AppStorage("gridVisible") private var gridVisible = true
@@ -39,57 +41,79 @@ struct SettingsView: View {
     ]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                settingsSection("AI Provider", icon: "cpu") {
-                    settingsRow("Default Provider") {
-                        Picker("", selection: $defaultProvider) {
-                            Text("Claude (via Claude Code)").tag("claude")
-                            Text("Codex (via OpenAI)").tag("codex")
-                        }
-                        .labelsHidden()
-                        .fixedSize()
-                        .onChange(of: defaultProvider) {
-                            if !modelsForProvider.contains(where: { $0.id == defaultModel }) {
-                                defaultModel = modelsForProvider.first?.id ?? "sonnet"
-                            }
-                        }
+        VStack(spacing: 0) {
+            if let onClose {
+                HStack {
+                    Text("Settings")
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                    Button {
+                        onClose()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 22, height: 22)
+                            .background(.quaternary, in: Circle())
                     }
-
-                    settingsRow("Default Model") {
-                        Picker("", selection: $defaultModel) {
-                            ForEach(modelsForProvider, id: \.id) { model in
-                                Text(model.name).tag(model.id)
-                            }
-                        }
-                        .labelsHidden()
-                        .fixedSize()
-                    }
+                    .buttonStyle(.plain)
                 }
-
-                settingsSection("Canvas", icon: "square.grid.3x3") {
-                    settingsRow("Show Grid") {
-                        Toggle("", isOn: $gridVisible)
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                    }
-                }
-
-                settingsSection("Keyboard Shortcuts", icon: "keyboard") {
-                    ForEach(shortcuts, id: \.0) { shortcut in
-                        settingsRow(shortcut.0) {
-                            Text(shortcut.1)
-                                .font(.system(size: 12, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                Divider()
             }
-            .padding(24)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    settingsSection("AI Provider", icon: "cpu") {
+                        settingsRow("Default Provider") {
+                            Picker("", selection: $defaultProvider) {
+                                Text("Claude (via Claude Code)").tag("claude")
+                                Text("Codex (via OpenAI)").tag("codex")
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+                            .onChange(of: defaultProvider) {
+                                if !modelsForProvider.contains(where: { $0.id == defaultModel }) {
+                                    defaultModel = modelsForProvider.first?.id ?? "sonnet"
+                                }
+                            }
+                        }
+
+                        settingsRow("Default Model") {
+                            Picker("", selection: $defaultModel) {
+                                ForEach(modelsForProvider, id: \.id) { model in
+                                    Text(model.name).tag(model.id)
+                                }
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+                        }
+                    }
+
+                    settingsSection("Canvas", icon: "square.grid.3x3") {
+                        settingsRow("Show Grid") {
+                            Toggle("", isOn: $gridVisible)
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                        }
+                    }
+
+                    settingsSection("Keyboard Shortcuts", icon: "keyboard") {
+                        ForEach(shortcuts, id: \.0) { shortcut in
+                            settingsRow(shortcut.0) {
+                                Text(shortcut.1)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .padding(24)
+            }
         }
-        .frame(minWidth: 420, minHeight: 440)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
-        .background(SettingsWindowConfigurator())
     }
 
     // MARK: - Components
@@ -131,18 +155,3 @@ struct SettingsView: View {
     }
 }
 
-/// Configures the NSWindow to be opaque and non-click-through.
-private struct SettingsWindowConfigurator: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async {
-            guard let window = view.window else { return }
-            window.styleMask.insert(.resizable)
-            window.isOpaque = true
-            window.ignoresMouseEvents = false
-        }
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {}
-}

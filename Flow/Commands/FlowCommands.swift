@@ -5,6 +5,7 @@ import AFCanvas
 struct FlowCommands: Commands {
     let appState: AppState
     @Binding var sidebarVisible: Bool
+    @Binding var settingsVisible: Bool
     @Binding var showCommandPalette: Bool
 
     var body: some Commands {
@@ -65,6 +66,13 @@ struct FlowCommands: Commands {
                 }
             }
             .keyboardShortcut(.delete, modifiers: [])
+        }
+
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings") {
+                settingsVisible.toggle()
+            }
+            .keyboardShortcut(",", modifiers: .command)
         }
 
         CommandGroup(after: .sidebar) {

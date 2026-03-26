@@ -9,6 +9,7 @@ struct FlowApp: App {
     @State private var providerRegistry = ProviderRegistry()
     @State private var gitStatus = GitStatusService()
     @State private var sidebarVisible = true
+    @State private var settingsVisible = false
     @State private var showCommandPalette = false
 
     init() {
@@ -93,6 +94,7 @@ struct FlowApp: App {
         Window("Flow", id: "main") {
             ProjectEditorView(
                 sidebarVisible: $sidebarVisible,
+                settingsVisible: $settingsVisible,
                 showCommandPalette: $showCommandPalette
             )
             .environment(appState)
@@ -105,14 +107,9 @@ struct FlowApp: App {
             FlowCommands(
                 appState: appState,
                 sidebarVisible: $sidebarVisible,
+                settingsVisible: $settingsVisible,
                 showCommandPalette: $showCommandPalette
             )
         }
-
-        Settings {
-            SettingsView()
-                .environment(appState)
-        }
-        .windowResizability(.contentSize)
     }
 }
