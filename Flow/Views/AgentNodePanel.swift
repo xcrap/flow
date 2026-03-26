@@ -475,17 +475,66 @@ struct AgentNodePanel: View {
         return AttributedString(conversation.streamingText)
     }
 
-    private func errorRow(_ error: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 12))
-                .foregroundStyle(.red)
-                .frame(width: 20, height: 20)
+    private var isRecoverableError: Bool {
+        guard let error = conversation.error else { return false }
+        let nonRecoverable = ["not found", "Install with", "Configure it in Settings", "Failed to start"]
+        return !nonRecoverable.contains(where: { error.contains($0) })
+    }
 
-            Text(error)
-                .font(.system(size: 13))
-                .foregroundStyle(.red)
-                .frame(maxWidth: .infinity, alignment: .leading)
+    private func errorRow(_ error: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.red)
+                    .frame(width: 20, height: 20)
+
+                Text(error)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            HStack(spacing: 8) {
+                if isRecoverableError, conversation.sessionID != nil {
+                    Button {
+                        conversation.dismissError()
+                        onSend("continue", [])
+                    } label: {
+                        Label("Resume session", systemImage: "arrow.clockwise")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.red.opacity(0.12), in: Capsule())
+                    .foregroundStyle(.red)
+                } else if isRecoverableError, let lastPrompt = conversation.latestUserPrompt {
+                    Button {
+                        conversation.dismissError()
+                        onSend(lastPrompt, [])
+                    } label: {
+                        Label("Retry", systemImage: "arrow.counterclockwise")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.red.opacity(0.12), in: Capsule())
+                    .foregroundStyle(.red)
+                }
+
+                Button {
+                    conversation.dismissError()
+                } label: {
+                    Text("Dismiss")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .foregroundStyle(.secondary)
+            }
         }
         .padding(12)
         .background(.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))

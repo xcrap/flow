@@ -128,14 +128,51 @@ struct TerminalNodePanel: View {
     }
 
     private var terminalArea: some View {
-        TerminalSurface(session: session)
-            .id(session.viewIdentity)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(8)
-            .background(Color.black.opacity(0.12))
-            .onAppear {
-                restoreInputFocusIfNeeded()
+        ZStack(alignment: .bottom) {
+            TerminalSurface(session: session)
+                .id(session.viewIdentity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(8)
+                .background(Color.black.opacity(0.12))
+                .onAppear {
+                    restoreInputFocusIfNeeded()
+                }
+
+            if !session.isRunning, let exitCode = session.lastExitCode {
+                crashBanner(exitCode: exitCode)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+        }
+    }
+
+    private func crashBanner(exitCode: Int32) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: exitCode != 0 ? "exclamationmark.triangle.fill" : "terminal")
+                .font(.system(size: 12))
+                .foregroundStyle(exitCode != 0 ? .orange : .secondary)
+
+            Text(exitCode != 0 ? "Process crashed (exit \(exitCode))" : "Shell exited")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.primary.opacity(0.8))
+
+            Spacer()
+
+            Button {
+                session.restart()
+            } label: {
+                Label("Reopen", systemImage: "arrow.clockwise")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Color.orange.opacity(0.15), in: Capsule())
+            .foregroundStyle(.orange)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+        .background(Color(red: 0.13, green: 0.12, blue: 0.10).opacity(0.9))
     }
 
     private func restoreInputFocusIfNeeded() {

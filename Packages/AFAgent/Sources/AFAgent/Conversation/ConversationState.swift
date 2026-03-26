@@ -199,6 +199,13 @@ public final class ConversationState {
         lastRuntimeEventAt = Date()
     }
 
+    public func dismissError() {
+        error = nil
+        if runtimePhase == .failed {
+            runtimePhase = .idle
+        }
+    }
+
     public func updateUsage(inputTokens: Int, outputTokens: Int, costUSD: Double?) {
         totalInputTokens += inputTokens
         totalOutputTokens += outputTokens
