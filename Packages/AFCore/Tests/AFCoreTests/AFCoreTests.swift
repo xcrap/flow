@@ -613,3 +613,312 @@ final class AFCoreTests: XCTestCase {
         XCTAssertEqual(cp.snapshotData, Data())
     }
 }
+
+// MARK: - BinaryHealth Tests
+
+final class BinaryHealthTests: XCTestCase {
+
+    func testCheckingIsNotUsable() {
+        let health = BinaryHealth.checking
+        XCTAssertFalse(health.isUsable)
+        XCTAssertNil(health.path)
+        XCTAssertNil(health.version)
+        XCTAssertEqual(health.statusLabel, "Checking…")
+    }
+
+    func testAvailableIsUsable() {
+        let health = BinaryHealth.available(path: "/usr/bin/test", version: "1.2.3")
+        XCTAssertTrue(health.isUsable)
+        XCTAssertEqual(health.path, "/usr/bin/test")
+        XCTAssertEqual(health.version, "1.2.3")
+        XCTAssertEqual(health.statusLabel, "1.2.3")
+    }
+
+    func testAvailableWithoutVersion() {
+        let health = BinaryHealth.available(path: "/usr/bin/test", version: nil)
+        XCTAssertTrue(health.isUsable)
+        XCTAssertEqual(health.path, "/usr/bin/test")
+        XCTAssertNil(health.version)
+        XCTAssertEqual(health.statusLabel, "Installed")
+    }
+
+    func testNotFoundIsNotUsable() {
+        let health = BinaryHealth.notFound
+        XCTAssertFalse(health.isUsable)
+        XCTAssertNil(health.path)
+        XCTAssertNil(health.version)
+        XCTAssertEqual(health.statusLabel, "Not found")
+    }
+
+    func testEquality() {
+        XCTAssertEqual(BinaryHealth.checking, BinaryHealth.checking)
+        XCTAssertEqual(BinaryHealth.notFound, BinaryHealth.notFound)
+        XCTAssertEqual(
+            BinaryHealth.available(path: "/a", version: "1"),
+            BinaryHealth.available(path: "/a", version: "1")
+        )
+        XCTAssertNotEqual(BinaryHealth.checking, BinaryHealth.notFound)
+        XCTAssertNotEqual(
+            BinaryHealth.available(path: "/a", version: "1"),
+            BinaryHealth.available(path: "/b", version: "1")
+        )
+    }
+}
+
+// MARK: - BinarySpec Tests
+
+final class BinarySpecTests: XCTestCase {
+
+    func testInitialization() {
+        let spec = BinarySpec(
+            id: "test",
+            displayName: "Test Binary",
+            searchPaths: ["/usr/bin/test"],
+            versionArgs: ["--ver"],
+            shellFallbackName: "test",
+            installHint: "brew install test"
+        )
+        XCTAssertEqual(spec.id, "test")
+        XCTAssertEqual(spec.displayName, "Test Binary")
+        XCTAssertEqual(spec.searchPaths, ["/usr/bin/test"])
+        XCTAssertEqual(spec.versionArgs, ["--ver"])
+        XCTAssertEqual(spec.shellFallbackName, "test")
+        XCTAssertEqual(spec.installHint, "brew install test")
+    }
+
+    func testDefaultValues() {
+        let spec = BinarySpec(id: "x", displayName: "X", searchPaths: [])
+        XCTAssertEqual(spec.versionArgs, ["--version"])
+        XCTAssertNil(spec.shellFallbackName)
+        XCTAssertNil(spec.installHint)
+    }
+}
+
+// MARK: - RuntimeDiscovery Tests
+
+final class RuntimeDiscoveryTests: XCTestCase {
+
+    private var tempDir: URL!
+
+    override func setUp() {
+        super.setUp()
+        tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RuntimeDiscoveryTests-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+    }
+
+    override func tearDown() {
+        try? FileManager.default.removeItem(at: tempDir)
+        super.tearDown()
+    }
+
+    private func createExecutable(at relativePath: String) throws -> URL {
+        let url = tempDir.appendingPathComponent(relativePath)
+        let dir = url.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: url.path, contents: Data("#!/bin/sh\n".utf8))
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: url.path
+        )
+        return url
+    }
+
+    // MARK: - Direct path resolution
+
+    func testResolvesDirectPath() async throws {
+        let binary = try createExecutable(at: "bin/mytool")
+        let spec = BinarySpec(
+            id: "mytool",
+            displayName: "My Tool",
+            searchPaths: [binary.path]
+        )
+        let discovery = RuntimeDiscovery()
+        await discovery.register(spec)
+
+        let resolved = await discovery.resolvedPath(for: "mytool")
+        XCTAssertEqual(resolved?.path, binary.path)
+    }
+
+    func testHealthAvailableForFoundBinary() async throws {
+        let binary = try createExecutable(at: "bin/mytool")
+        let spec = BinarySpec(
+            id: "mytool",
+            displayName: "My Tool",
+            searchPaths: [binary.path]
+        )
+        let discovery = RuntimeDiscovery()
+        await discovery.register(spec)
+
+        let health = await discovery.health(for: "mytool")
+        XCTAssertTrue(health.isUsable)
+        XCTAssertEqual(health.path, binary.path)
+    }
+
+    func testNotFoundForMissingBinary() async {
+        let spec = BinarySpec(
+            id: "ghost",
+            displayName: "Ghost",
+            searchPaths: ["/nonexistent/path/ghost"]
+        )
+        let discovery = RuntimeDiscovery()
+        await discovery.register(spec)
+
+        let resolved = await discovery.resolvedPath(for: "ghost")
+        XCTAssertNil(resolved)
+
+        let health = await discovery.health(for: "ghost")
+        XCTAssertEqual(health, .notFound)
+    }
+
+    func testUnregisteredBinaryReturnsNotFound() async {
+        let discovery = RuntimeDiscovery()
+        let health = await discovery.health(for: "unknown")
+        XCTAssertEqual(health, .notFound)
+    }
+
+    // MARK: - Glob expansion (the core bug fix)
+
+    func testGlobExpandsWildcardDirectory() async throws {
+        // Simulate NVM structure: node/v20.0.0/bin/tool
+        let binary = try createExecutable(at: "node/v20.0.0/bin/tool")
+        // Create another version directory without the binary
+        try FileManager.default.createDirectory(
+            at: tempDir.appendingPathComponent("node/v18.0.0/bin"),
+            withIntermediateDirectories: true
+        )
+
+        let spec = BinarySpec(
+            id: "tool",
+            displayName: "Tool",
+            searchPaths: ["\(tempDir.path)/node/*/bin/tool"]
+        )
+        let discovery = RuntimeDiscovery()
+        await discovery.register(spec)
+
+        let resolved = await discovery.resolvedPath(for: "tool")
+        XCTAssertEqual(resolved?.path, binary.path)
+    }
+
+    func testGlobWithMultipleMatchesFindsFirst() async throws {
+        // Create two versions with the binary
+        let _ = try createExecutable(at: "node/v18.0.0/bin/tool")
+        let _ = try createExecutable(at: "node/v20.0.0/bin/tool")
+
+        let spec = BinarySpec(
+            id: "tool",
+            displayName: "Tool",
+            searchPaths: ["\(tempDir.path)/node/*/bin/tool"]
+        )
+        let discovery = RuntimeDiscovery()
+        await discovery.register(spec)
+
+        let resolved = await discovery.resolvedPath(for: "tool")
+        XCTAssertNotNil(resolved)
+        // Should find one of the versions
+        XCTAssertTrue(resolved!.path.contains("/bin/tool"))
+    }
+
+    func testGlobReturnsEmptyWhenBaseDirectoryMissing() async {
+        let spec = BinarySpec(
+            id: "tool",
+            displayName: "Tool",
+            searchPaths: ["/nonexistent/path/*/bin/tool"]
+        )
+        let discovery = RuntimeDiscovery()
+        await discovery.register(spec)
+
+        let resolved = await discovery.resolvedPath(for: "tool")
+        XCTAssertNil(resolved)
+    }
+
+    func testGlobIgnoresNonExecutableFiles() async throws {
+        // Create a file that is NOT executable
+        let dir = tempDir.appendingPathComponent("node/v20.0.0/bin")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let filePath = dir.appendingPathComponent("tool").path
+        FileManager.default.createFile(atPath: filePath, contents: Data("data".utf8))
+        // Permissions default to non-executable (0o644)
+
+        let spec = BinarySpec(
+            id: "tool",
+            displayName: "Tool",
+            searchPaths: ["\(tempDir.path)/node/*/bin/tool"]
+        )
+        let discovery = RuntimeDiscovery()
+        await discovery.register(spec)
+
+        let resolved = await discovery.resolvedPath(for: "tool")
+        XCTAssertNil(resolved)
+    }
+
+    // MARK: - Priority and fallback
+
+    func testDirectPathTakesPriorityOverGlob() async throws {
+        let directBinary = try createExecutable(at: "direct/tool")
+        let _ = try createExecutable(at: "node/v20.0.0/bin/tool")
+
+        let spec = BinarySpec(
+            id: "tool",
+            displayName: "Tool",
+            searchPaths: [
+                directBinary.path,
+                "\(tempDir.path)/node/*/bin/tool",
+            ]
+        )
+        let discovery = RuntimeDiscovery()
+        await discovery.register(spec)
+
+        let resolved = await discovery.resolvedPath(for: "tool")
+        XCTAssertEqual(resolved?.path, directBinary.path)
+    }
+
+    func testFallsBackToGlobWhenDirectPathMissing() async throws {
+        let globBinary = try createExecutable(at: "node/v20.0.0/bin/tool")
+
+        let spec = BinarySpec(
+            id: "tool",
+            displayName: "Tool",
+            searchPaths: [
+                "\(tempDir.path)/nonexistent/tool",
+                "\(tempDir.path)/node/*/bin/tool",
+            ]
+        )
+        let discovery = RuntimeDiscovery()
+        await discovery.register(spec)
+
+        let resolved = await discovery.resolvedPath(for: "tool")
+        XCTAssertEqual(resolved?.path, globBinary.path)
+    }
+
+    // MARK: - Spec storage
+
+    func testSpecRetrieval() async {
+        let spec = BinarySpec(id: "test", displayName: "Test", searchPaths: [])
+        let discovery = RuntimeDiscovery()
+        await discovery.register(spec)
+
+        let retrieved = await discovery.spec(for: "test")
+        XCTAssertEqual(retrieved?.id, "test")
+        XCTAssertEqual(retrieved?.displayName, "Test")
+    }
+
+    func testAllSpecs() async {
+        let discovery = RuntimeDiscovery()
+        await discovery.register(BinarySpec(id: "a", displayName: "A", searchPaths: []))
+        await discovery.register(BinarySpec(id: "b", displayName: "B", searchPaths: []))
+
+        let all = await discovery.allSpecs()
+        XCTAssertEqual(all.count, 2)
+        XCTAssertTrue(all.contains { $0.id == "a" })
+        XCTAssertTrue(all.contains { $0.id == "b" })
+    }
+
+    func testAllHealth() async {
+        let discovery = RuntimeDiscovery()
+        await discovery.register(BinarySpec(id: "missing", displayName: "M", searchPaths: ["/no/such/file"]))
+
+        let health = await discovery.allHealth()
+        XCTAssertEqual(health["missing"], .notFound)
+    }
+}

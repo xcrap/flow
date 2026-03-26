@@ -8,6 +8,7 @@ struct FlowApp: App {
     @State private var appState: AppState
     @State private var providerRegistry = ProviderRegistry()
     @State private var gitStatus = GitStatusService()
+    @State private var healthMonitor: RuntimeHealthMonitor
     @State private var sidebarVisible = true
     @State private var settingsVisible = false
     @State private var showCommandPalette = false
@@ -16,6 +17,7 @@ struct FlowApp: App {
         let state = AppState()
         ProjectPersistence.load(into: state)
         _appState = State(initialValue: state)
+        _healthMonitor = State(initialValue: RuntimeHealthMonitor(discovery: RuntimeDiscovery()))
 
         let appState = state
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
@@ -100,6 +102,7 @@ struct FlowApp: App {
             .environment(appState)
             .environment(providerRegistry)
             .environment(gitStatus)
+            .environment(healthMonitor)
         }
         .defaultSize(width: 1400, height: 900)
         .windowToolbarStyle(.unified(showsTitle: true))

@@ -7,7 +7,8 @@ private actor CodexSessionStore {
     func session(
         for threadID: String?,
         workingDirectory: URL?,
-        systemPrompt: String?
+        systemPrompt: String?,
+        discovery: RuntimeDiscovery
     ) -> CodexSession {
         if let threadID, let existing = sessions[threadID] {
             return existing
@@ -16,7 +17,8 @@ private actor CodexSessionStore {
         let session = CodexSession(
             resumeThreadID: threadID,
             workingDirectory: workingDirectory,
-            systemPrompt: systemPrompt
+            systemPrompt: systemPrompt,
+            discovery: discovery
         )
 
         if let threadID {
@@ -35,6 +37,7 @@ private actor CodexSession {
     private let initialResumeThreadID: String?
     private var workingDirectory: URL?
     private var developerInstructions: String?
+    private let discovery: RuntimeDiscovery
 
     private var process: Process?
     private var writer: FileHandle?
@@ -54,12 +57,14 @@ private actor CodexSession {
     init(
         resumeThreadID: String?,
         workingDirectory: URL?,
-        systemPrompt: String?
+        systemPrompt: String?,
+        discovery: RuntimeDiscovery
     ) {
         initialResumeThreadID = resumeThreadID
         threadID = resumeThreadID
         self.workingDirectory = workingDirectory
         developerInstructions = systemPrompt
+        self.discovery = discovery
     }
 
     func startTurn(
@@ -137,7 +142,14 @@ private actor CodexSession {
             return
         }
 
-        startServer()
+        guard let codexURL = await discovery.resolvedPath(for: "codex") else {
+            let hint = await discovery.spec(for: "codex")?.installHint ?? "npm install -g @openai/codex"
+            throw NSError(domain: "CodexProvider", code: 4, userInfo: [
+                NSLocalizedDescriptionKey: "Codex CLI not found. Install with: \(hint)",
+            ])
+        }
+
+        startServer(executableURL: codexURL)
 
         for _ in 0..<100 {
             try await Task.sleep(for: .milliseconds(50))
@@ -178,13 +190,13 @@ private actor CodexSession {
         return nextID
     }
 
-    private func startServer() {
+    private func startServer(executableURL: URL) {
         let process = Process()
         let stdinPipe = Pipe()
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
 
-        process.executableURL = Self.findCodex()
+        process.executableURL = executableURL
         process.arguments = ["app-server"]
         process.standardInput = stdinPipe
         process.standardOutput = stdoutPipe
@@ -603,19 +615,6 @@ private actor CodexSession {
         return paths
     }
 
-    private static func findCodex() -> URL {
-        let candidates = [
-            "/opt/homebrew/bin/codex",
-            "/usr/local/bin/codex",
-            "\(NSHomeDirectory())/.local/bin/codex",
-        ]
-
-        for path in candidates where FileManager.default.isExecutableFile(atPath: path) {
-            return URL(fileURLWithPath: path)
-        }
-
-        return URL(fileURLWithPath: "/opt/homebrew/bin/codex")
-    }
 }
 
 private actor CodexSessionReference {
@@ -638,8 +637,11 @@ public final class CodexProvider: AIProvider, Sendable {
     ]
 
     private let store = CodexSessionStore()
+    private let discovery: RuntimeDiscovery
 
-    public init() {}
+    public init(discovery: RuntimeDiscovery) {
+        self.discovery = discovery
+    }
 
     public func sendMessage(
         prompt: String,
@@ -660,7 +662,8 @@ public final class CodexProvider: AIProvider, Sendable {
                     let session = await store.session(
                         for: resumeSessionID,
                         workingDirectory: workingDirectory,
-                        systemPrompt: systemPrompt
+                        systemPrompt: systemPrompt,
+                        discovery: discovery
                     )
                     await reference.set(session)
                     let threadID = try await session.startTurn(

@@ -8,6 +8,7 @@ struct ProjectEditorView: View {
     @Environment(AppState.self) private var appState
     @Environment(ProviderRegistry.self) private var providerRegistry
     @Environment(GitStatusService.self) private var gitStatus
+    @Environment(RuntimeHealthMonitor.self) private var healthMonitor
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("gridVisible") private var gridVisible = true
     @Binding var sidebarVisible: Bool
@@ -145,13 +146,22 @@ struct ProjectEditorView: View {
     // MARK: - Provider Setup
 
     private func setupProviders() {
+        let discovery = healthMonitor.discovery
+
+        // Register providers immediately so conversationService is available
         if providerRegistry.provider(for: "claude") == nil {
-            providerRegistry.register(ClaudeCodeProvider())
+            providerRegistry.register(ClaudeCodeProvider(discovery: discovery))
         }
         if providerRegistry.provider(for: "codex") == nil {
-            providerRegistry.register(CodexProvider())
+            providerRegistry.register(CodexProvider(discovery: discovery))
         }
         conversationService = ConversationService(registry: providerRegistry)
+
+        // Register binary specs asynchronously (path resolution + version checks)
+        Task {
+            await discovery.register(BinarySpec.claude)
+            await discovery.register(BinarySpec.codex)
+        }
     }
 
     // MARK: - Canvas

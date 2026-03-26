@@ -1,8 +1,10 @@
 import SwiftUI
+import AFCore
 
 struct SettingsView: View {
     var onClose: (() -> Void)? = nil
 
+    @Environment(RuntimeHealthMonitor.self) private var healthMonitor
     @AppStorage("defaultProvider") private var defaultProvider = "claude"
     @AppStorage("defaultModel") private var defaultModel = "sonnet"
     @AppStorage("gridVisible") private var gridVisible = true
@@ -91,6 +93,26 @@ struct SettingsView: View {
                         }
                     }
 
+                    settingsSection("Runtime Health", icon: "stethoscope") {
+                        ForEach(healthMonitor.specs, id: \.id) { spec in
+                            runtimeHealthRow(spec: spec)
+                        }
+
+                        HStack {
+                            Spacer()
+                            Button {
+                                Task { await healthMonitor.refresh() }
+                            } label: {
+                                Label("Refresh", systemImage: "arrow.clockwise")
+                                    .font(.system(size: 11))
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                    }
+
                     settingsSection("Canvas", icon: "square.grid.3x3") {
                         settingsRow("Show Grid") {
                             Toggle("", isOn: $gridVisible)
@@ -114,6 +136,76 @@ struct SettingsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
+        .task {
+            await healthMonitor.loadCurrent()
+        }
+    }
+
+    // MARK: - Runtime Health
+
+    private func runtimeHealthRow(spec: BinarySpec) -> some View {
+        let health = healthMonitor.health(for: spec.id)
+
+        return HStack(spacing: 8) {
+            Circle()
+                .fill(healthColor(health))
+                .frame(width: 7, height: 7)
+
+            Text(spec.displayName)
+                .font(.system(size: 13))
+
+            Spacer()
+
+            switch health {
+            case .checking:
+                ProgressView()
+                    .controlSize(.small)
+                Text("Checking...")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+
+            case .available(let path, let version):
+                VStack(alignment: .trailing, spacing: 2) {
+                    if let version {
+                        Text("v\(version)")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(abbreviatePath(path))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+            case .notFound:
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Not installed")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.red)
+                    if let hint = spec.installHint {
+                        Text(hint)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private func healthColor(_ health: BinaryHealth) -> Color {
+        switch health {
+        case .checking: .orange
+        case .available: .green
+        case .notFound: .red
+        }
+    }
+
+    private func abbreviatePath(_ path: String) -> String {
+        path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
     }
 
     // MARK: - Components

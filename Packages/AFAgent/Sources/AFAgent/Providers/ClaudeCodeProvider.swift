@@ -42,7 +42,11 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         AIModel(id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", contextWindow: claudeEffectiveContextWindow),
     ]
 
-    public init() {}
+    private let discovery: RuntimeDiscovery
+
+    public init(discovery: RuntimeDiscovery) {
+        self.discovery = discovery
+    }
 
     public func sendMessage(
         prompt: String,
@@ -133,51 +137,6 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         }
     }
 
-    private static func findClaude() -> URL {
-        let candidates = [
-            "\(NSHomeDirectory())/.local/bin/claude",
-            "/usr/local/bin/claude",
-            "/opt/homebrew/bin/claude",
-            "\(NSHomeDirectory())/.npm/bin/claude",
-            "\(NSHomeDirectory())/.nvm/versions/node/*/bin/claude",
-        ]
-
-        for path in candidates {
-            if path.contains("*") {
-                let dir = (path as NSString).deletingLastPathComponent
-                let file = (path as NSString).lastPathComponent
-                if let contents = try? FileManager.default.contentsOfDirectory(atPath: dir) {
-                    for item in contents {
-                        let fullPath = "\(dir)/\(item)/\(file)"
-                        if FileManager.default.isExecutableFile(atPath: fullPath) {
-                            return URL(fileURLWithPath: fullPath)
-                        }
-                    }
-                }
-            } else if FileManager.default.isExecutableFile(atPath: path) {
-                return URL(fileURLWithPath: path)
-            }
-        }
-
-        let shell = Process()
-        let pipe = Pipe()
-        shell.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        shell.arguments = ["-l", "-c", "which claude"]
-        shell.standardOutput = pipe
-        shell.standardError = FileHandle.nullDevice
-        try? shell.run()
-        shell.waitUntilExit()
-
-        if let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-           !output.isEmpty
-        {
-            return URL(fileURLWithPath: output)
-        }
-
-        return URL(fileURLWithPath: "/usr/bin/env")
-    }
-
     private func runClaude(
         prompt: String,
         imagePaths: [URL] = [],
@@ -190,35 +149,26 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         process: Process,
         continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
     ) async throws {
-        let claudeURL = Self.findClaude()
+        guard let claudeURL = await discovery.resolvedPath(for: "claude") else {
+            let hint = await discovery.spec(for: "claude")?.installHint ?? "npm install -g @anthropic-ai/claude-code"
+            continuation.yield(.error("Claude Code CLI not found. Install with: \(hint)"))
+            continuation.finish()
+            return
+        }
+
         let stdout = Pipe()
         let stderr = Pipe()
 
-        if claudeURL.path == "/usr/bin/env" {
-            process.executableURL = claudeURL
-            var args = ["claude"]
-            args += Self.buildArgs(
-                model: model,
-                effort: effort,
-                systemPrompt: systemPrompt,
-                permissionMode: permissionMode,
-                prompt: prompt,
-                resumeSessionID: resumeSessionID,
-                imagePaths: imagePaths
-            )
-            process.arguments = args
-        } else {
-            process.executableURL = claudeURL
-            process.arguments = Self.buildArgs(
-                model: model,
-                effort: effort,
-                systemPrompt: systemPrompt,
-                permissionMode: permissionMode,
-                prompt: prompt,
-                resumeSessionID: resumeSessionID,
-                imagePaths: imagePaths
-            )
-        }
+        process.executableURL = claudeURL
+        process.arguments = Self.buildArgs(
+            model: model,
+            effort: effort,
+            systemPrompt: systemPrompt,
+            permissionMode: permissionMode,
+            prompt: prompt,
+            resumeSessionID: resumeSessionID,
+            imagePaths: imagePaths
+        )
 
         var environment = ProcessInfo.processInfo.environment
         let extraPaths = [

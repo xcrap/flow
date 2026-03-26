@@ -951,37 +951,37 @@ final class StreamEventTests: XCTestCase {
 final class ClaudeCodeProviderTests: XCTestCase {
 
     func testProviderID() throws {
-        let provider = ClaudeCodeProvider()
+        let provider = ClaudeCodeProvider(discovery: RuntimeDiscovery())
         XCTAssertEqual(provider.id, "claude")
     }
 
     func testProviderDisplayName() throws {
-        let provider = ClaudeCodeProvider()
+        let provider = ClaudeCodeProvider(discovery: RuntimeDiscovery())
         XCTAssertEqual(provider.displayName, "Claude (via Claude Code)")
     }
 
     func testAvailableModelsNotEmpty() throws {
-        let provider = ClaudeCodeProvider()
+        let provider = ClaudeCodeProvider(discovery: RuntimeDiscovery())
         XCTAssertFalse(provider.availableModels.isEmpty)
     }
 
     func testAvailableModelsContainsSonnet() throws {
-        let provider = ClaudeCodeProvider()
+        let provider = ClaudeCodeProvider(discovery: RuntimeDiscovery())
         XCTAssertTrue(provider.availableModels.contains { $0.id == "sonnet" })
     }
 
     func testAvailableModelsContainsOpus() throws {
-        let provider = ClaudeCodeProvider()
+        let provider = ClaudeCodeProvider(discovery: RuntimeDiscovery())
         XCTAssertTrue(provider.availableModels.contains { $0.id == "opus" })
     }
 
     func testAvailableModelsContainsHaiku() throws {
-        let provider = ClaudeCodeProvider()
+        let provider = ClaudeCodeProvider(discovery: RuntimeDiscovery())
         XCTAssertTrue(provider.availableModels.contains { $0.id == "haiku" })
     }
 
     func testClaudeModelsUseSharedEffectiveContextWindow() throws {
-        let provider = ClaudeCodeProvider()
+        let provider = ClaudeCodeProvider(discovery: RuntimeDiscovery())
         let opus = provider.availableModels.first { $0.id == "opus" }
         let sonnet = provider.availableModels.first { $0.id == "sonnet" }
         XCTAssertNotNil(opus)
