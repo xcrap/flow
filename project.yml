@@ -23,8 +23,6 @@ packages:
     path: Packages/AFAgent
   AFTerminal:
     path: Packages/AFTerminal
-  AFPersistence:
-    path: Packages/AFPersistence
   AFDiff:
     path: Packages/AFDiff
 
@@ -51,7 +49,6 @@ targets:
       - package: AFCanvas
       - package: AFAgent
       - package: AFTerminal
-      - package: AFPersistence
       - package: AFDiff
     entitlements:
       path: Flow/Flow.entitlements
