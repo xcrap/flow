@@ -8,6 +8,7 @@ struct PersistedProject: Codable {
     var nodes: [WorkflowNode]
     var connections: [NodeConnection]
     var nodeZOrder: [UUID]?
+    var nodeOrder: [UUID]?
 }
 
 struct PersistedAppState: Codable {
@@ -39,7 +40,8 @@ public final class ProjectPersistence {
                     project: project,
                     nodes: Array(state.nodes.values),
                     connections: Array(state.connections.values),
-                    nodeZOrder: state.nodeZOrder
+                    nodeZOrder: state.nodeZOrder,
+                    nodeOrder: state.nodeOrder
                 )
             },
             activeProjectID: appState.activeProjectID
@@ -71,6 +73,7 @@ public final class ProjectPersistence {
                     state.connections[conn.id] = conn
                 }
                 state.nodeZOrder = p.nodeZOrder ?? Array(state.nodes.keys)
+                state.nodeOrder = p.nodeOrder ?? state.nodeZOrder
                 return state
             }
             appState.activeProjectID = persisted.activeProjectID ?? appState.openProjects.first?.project.id

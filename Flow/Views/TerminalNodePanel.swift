@@ -5,6 +5,7 @@ import AFTerminal
 
 struct TerminalNodePanel: View {
     let node: WorkflowNode
+    var nodeNumber: Int?
     let isSelected: Bool
     let isTitleHovered: Bool
     @Bindable var session: TerminalSession
@@ -45,6 +46,14 @@ struct TerminalNodePanel: View {
             Image(systemName: "terminal")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(session.isRunning ? .green : .orange)
+
+            if let nodeNumber {
+                Text("\(nodeNumber)")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .frame(width: 20, height: 20)
+                    .background(Circle().fill(Color.blue.opacity(0.4)))
+            }
 
             Text(node.title)
                 .font(.system(size: 14, weight: .medium))

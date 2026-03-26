@@ -46,6 +46,24 @@ struct FlowApp: App {
                     }
                     return nil
 
+                case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+                    if let project = appState.activeProject,
+                       let digit = Int(chars),
+                       let nodeID = project.nodeID(atNumber: digit),
+                       let node = project.nodes[nodeID] {
+                        project.selectedNodeIDs = [nodeID]
+                        project.selectedConnectionIDs.removeAll()
+                        project.bringToFront(nodeID)
+                        withAnimation(.spring(duration: 0.35)) {
+                            project.canvasState.center(
+                                on: node.position.point,
+                                in: project.canvasState.viewportSize
+                            )
+                        }
+                        project.onChange?()
+                    }
+                    return nil
+
                 default:
                     return event
                 }

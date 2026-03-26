@@ -252,19 +252,9 @@ public struct CanvasNodeLayer: View {
         }
 
         Button("Duplicate") {
-            let newNode = WorkflowNode(
-                kind: node.kind,
-                title: "\(node.title) Copy",
-                position: NodePosition(
-                    x: node.position.x + node.position.width + 30,
-                    y: node.position.y,
-                    width: node.position.width,
-                    height: node.position.height
-                ),
-                configuration: node.configuration
-            )
-            projectState.nodes[newNode.id] = newNode
-            projectState.bringToFront(newNode.id)
+            if let newNode = projectState.duplicateNode(node.id) {
+                projectState.bringToFront(newNode.id)
+            }
         }
 
         Divider()

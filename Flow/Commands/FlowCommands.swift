@@ -125,20 +125,9 @@ struct FlowCommands: Commands {
         var newIDs: Set<UUID> = []
 
         for id in selectedIDs {
-            guard let node = project.nodes[id] else { continue }
-            let newNode = WorkflowNode(
-                kind: node.kind,
-                title: "\(node.title) Copy",
-                position: NodePosition(
-                    x: node.position.x + node.position.width + 30,
-                    y: node.position.y,
-                    width: node.position.width,
-                    height: node.position.height
-                ),
-                configuration: node.configuration
-            )
-            project.nodes[newNode.id] = newNode
-            newIDs.insert(newNode.id)
+            if let newNode = project.duplicateNode(id) {
+                newIDs.insert(newNode.id)
+            }
         }
 
         project.selectedNodeIDs = newIDs

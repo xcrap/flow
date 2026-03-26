@@ -81,16 +81,9 @@ struct ProjectSidebarView: View {
     }
 
     private func agentSection(for project: ProjectState) -> some View {
-        let agentNodes = project.nodes.values
+        let agentNodes = project.nodeOrder
+            .compactMap { project.nodes[$0] }
             .filter { $0.kind == .agent }
-            .sorted { lhs, rhs in
-                let lhsDate = conversations[lhs.id]?.lastVisibleActivityAt ?? .distantPast
-                let rhsDate = conversations[rhs.id]?.lastVisibleActivityAt ?? .distantPast
-                if lhsDate != rhsDate {
-                    return lhsDate > rhsDate
-                }
-                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
-            }
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -111,7 +104,7 @@ struct ProjectSidebarView: View {
             } else {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     ForEach(agentNodes) { node in
-                        agentCard(node: node, isSelected: project.selectedNodeIDs.contains(node.id))
+                        agentCard(node: node, isSelected: project.selectedNodeIDs.contains(node.id), nodeNumber: project.nodeNumber(for: node.id))
                     }
                 }
             }
@@ -222,7 +215,7 @@ struct ProjectSidebarView: View {
         }
     }
 
-    private func agentCard(node: WorkflowNode, isSelected: Bool) -> some View {
+    private func agentCard(node: WorkflowNode, isSelected: Bool, nodeNumber: Int? = nil) -> some View {
         let conversation = conversations[node.id]
         let runtimePhase = conversation?.runtimePhase ?? .idle
         let isWorking = runtimePhase.isWorking
@@ -267,6 +260,12 @@ struct ProjectSidebarView: View {
                     }
 
                     HStack(spacing: 6) {
+                        if let nodeNumber {
+                            Text("\(nodeNumber)")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.5))
+                        }
+
                         Text(node.title)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.white.opacity(0.7))

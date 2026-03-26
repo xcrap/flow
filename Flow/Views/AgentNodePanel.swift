@@ -8,6 +8,7 @@ import AFCanvas
 struct AgentNodePanel: View {
     @Environment(ProviderRegistry.self) private var providerRegistry
     let node: WorkflowNode
+    let nodeNumber: Int?
     let isSelected: Bool
     let isTitleHovered: Bool
     @Bindable var conversation: ConversationState
@@ -41,6 +42,7 @@ struct AgentNodePanel: View {
 
     init(
         node: WorkflowNode,
+        nodeNumber: Int? = nil,
         isSelected: Bool,
         isTitleHovered: Bool = false,
         conversation: ConversationState,
@@ -56,6 +58,7 @@ struct AgentNodePanel: View {
         onDelete: @escaping () -> Void
     ) {
         self.node = node
+        self.nodeNumber = nodeNumber
         self.isSelected = isSelected
         self.isTitleHovered = isTitleHovered
         self.conversation = conversation
@@ -232,6 +235,14 @@ struct AgentNodePanel: View {
             Image(systemName: "brain")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(isWorking ? statusColor : .purple)
+
+            if let nodeNumber {
+                Text("\(nodeNumber)")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .frame(width: 20, height: 20)
+                    .background(Circle().fill(Color.purple.opacity(0.4)))
+            }
 
             Text(node.title)
                 .font(.system(size: 14, weight: .medium))

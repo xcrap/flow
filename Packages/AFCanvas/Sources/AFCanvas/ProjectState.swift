@@ -12,6 +12,7 @@ public final class ProjectState {
     public var nodes: [UUID: WorkflowNode] = [:]
     public var connections: [UUID: NodeConnection] = [:]
     public var nodeZOrder: [UUID] = [] // back to front
+    public var nodeOrder: [UUID] = [] // creation order for sequential numbering
     public var isExecuting: Bool = false
     // Drag tracking: stores initial positions when drag starts
     var dragStartPositions: [UUID: CGPoint] = [:]
@@ -36,6 +37,7 @@ public final class ProjectState {
         )
         nodes[node.id] = node
         nodeZOrder.append(node.id)
+        nodeOrder.append(node.id)
         onChange?()
         return node
     }
@@ -43,6 +45,7 @@ public final class ProjectState {
     public func removeNode(_ id: UUID) {
         nodes.removeValue(forKey: id)
         nodeZOrder.removeAll { $0 == id }
+        nodeOrder.removeAll { $0 == id }
         let toRemove = connections.values.filter { $0.sourceNodeID == id || $0.targetNodeID == id }
         for connection in toRemove {
             connections.removeValue(forKey: connection.id)
@@ -60,6 +63,40 @@ public final class ProjectState {
         nodeZOrder.removeAll { $0 == id }
         nodeZOrder.append(id)
         onChange?()
+    }
+
+    @discardableResult
+    public func duplicateNode(_ id: UUID, offset: CGPoint = CGPoint(x: 30, y: 0)) -> WorkflowNode? {
+        guard let node = nodes[id] else { return nil }
+        let newNode = WorkflowNode(
+            kind: node.kind,
+            title: "\(node.title) Copy",
+            position: NodePosition(
+                x: node.position.x + node.position.width + offset.x,
+                y: node.position.y + offset.y,
+                width: node.position.width,
+                height: node.position.height
+            ),
+            configuration: node.configuration
+        )
+        nodes[newNode.id] = newNode
+        nodeZOrder.append(newNode.id)
+        nodeOrder.append(newNode.id)
+        onChange?()
+        return newNode
+    }
+
+    // MARK: - Node Numbering
+
+    public func nodeNumber(for id: UUID) -> Int? {
+        guard let index = nodeOrder.firstIndex(of: id) else { return nil }
+        return index + 1
+    }
+
+    public func nodeID(atNumber number: Int) -> UUID? {
+        let index = number - 1
+        guard index >= 0, index < nodeOrder.count else { return nil }
+        return nodeOrder[index]
     }
 
     // MARK: - Connection Operations
@@ -193,12 +230,7 @@ public final class ProjectState {
     }
 
     public func tidyUp(viewportSize: CGSize) {
-        let sortedNodes = nodes.values.sorted {
-            if abs($0.position.y - $1.position.y) < 100 {
-                return $0.position.x < $1.position.x
-            }
-            return $0.position.y < $1.position.y
-        }
+        let sortedNodes = nodeOrder.compactMap { nodes[$0] }
         guard !sortedNodes.isEmpty else { return }
 
         let gap: Double = 20

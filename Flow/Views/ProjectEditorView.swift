@@ -260,12 +260,14 @@ struct ProjectEditorView: View {
 
     @ViewBuilder
     private func nodePanel(node: WorkflowNode, isSelected: Bool, isTitleHovered: Bool, project: ProjectState) -> some View {
+        let nodeNumber = project.nodeNumber(for: node.id)
         switch node.kind {
         case .agent:
             let projectID = project.project.id
             let conversation = conversationFor(node.id, in: projectID)
             AgentNodePanel(
                     node: node,
+                    nodeNumber: nodeNumber,
                     isSelected: isSelected,
                     isTitleHovered: isTitleHovered,
                     conversation: conversation,
@@ -323,6 +325,7 @@ struct ProjectEditorView: View {
             let session = terminalSessionFor(node.id, in: projectID, rootPath: project.project.rootPath)
             TerminalNodePanel(
                 node: node,
+                nodeNumber: nodeNumber,
                 isSelected: isSelected,
                 isTitleHovered: isTitleHovered,
                 session: session,
