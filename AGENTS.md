@@ -9,7 +9,7 @@ Native macOS app for orchestrating AI agents and terminals on an infinite canvas
   - `AFCore` — Domain models (no UI deps)
   - `AFCanvas` — Canvas rendering, state management, persistence
   - `AFAgent` — AI providers (Claude Code, Codex/OpenAI), terminal sessions
-  - `AFTerminal`, `AFPersistence`, `AFDiff` — Placeholder packages for future use
+  - `AFTerminal` — Terminal session management (SwiftTerm wrapper)
 - **Main app target** in `Flow/` — Views, commands, services
 - **XcodeGen** — `project.yml` generates `Flow.xcodeproj`
 
