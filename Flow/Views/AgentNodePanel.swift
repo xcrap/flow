@@ -33,7 +33,7 @@ struct AgentNodePanel: View {
     @State private var selectedProvider: String
     @State private var selectedModel: String
     @State private var selectedEffort: String
-    @State private var showSettings = false
+    @State private var showContextSettings = false
     @State private var systemPromptText: String
     @State private var agentMode: AgentMode
     @State private var agentAccess: AgentAccess
@@ -215,6 +215,7 @@ struct AgentNodePanel: View {
                 ("medium", "Medium"),
                 ("high", "High"),
                 ("max", "Max"),
+                ("ultrathink", "Ultrathink"),
             ]
         }
     }
@@ -248,14 +249,14 @@ struct AgentNodePanel: View {
             switch normalized {
             case "none", "minimal", "low", "medium", "high", "xhigh":
                 return normalized
-            case "max":
+            case "max", "ultrathink":
                 return "xhigh"
             default:
                 return "high"
             }
         default:
             switch normalized {
-            case "low", "medium", "high", "max":
+            case "low", "medium", "high", "max", "ultrathink":
                 return normalized
             case "xhigh":
                 return "max"
@@ -854,23 +855,35 @@ struct AgentNodePanel: View {
             hasPendingInput: !conversation.pendingAttachments.isEmpty,
             selectedProvider: selectedProvider,
             selectedProviderName: selectedProviderName,
-            selectedModel: selectedModel,
+            selectedModel: $selectedModel,
             selectedModelName: selectedModelName,
-            showSettings: $showSettings,
-            systemPromptText: systemPromptText,
-            agentMode: agentMode,
-            agentAccess: agentAccess,
-            selectedEffort: selectedEffort,
+            selectedEffort: $selectedEffort,
+            agentMode: $agentMode,
+            agentAccess: $agentAccess,
+            effortOptions: effortOptions,
             providerOptions: providerOptions,
-            availableModels: availableModels,
+            modelsForProvider: { availableModels(for: $0) },
+            showContextSettings: $showContextSettings,
+            contextSettingsPopover: AnyView(contextSettingsPopover),
             attachmentStrip: !conversation.pendingAttachments.isEmpty ? AnyView(attachmentStrip) : nil,
-            settingsPopover: AnyView(settingsPopover),
             onSend: { send() },
             onCancel: onCancel,
             onSelectProvider: { selectProvider($0) },
             onModelChange: { id in
                 selectedModel = id
                 onModelChange(id)
+            },
+            onEffortChange: { effort in
+                selectedEffort = effort
+                onEffortChange(effort)
+            },
+            onModeChange: { mode in
+                agentMode = mode
+                onModeChange(mode)
+            },
+            onAccessChange: { access in
+                agentAccess = access
+                onAccessChange(access)
             },
             onOpenFilePicker: { openFilePicker() },
             onPaste: { handlePastedItems($0) }
@@ -977,107 +990,8 @@ struct AgentNodePanel: View {
         }
     }
 
-    private var settingsPopover: some View {
+    private var contextSettingsPopover: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Effort
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Effort")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-                ForEach(effortOptions, id: \.0) { id, name in
-                    Button {
-                        selectedEffort = id
-                        onEffortChange(id)
-                    } label: {
-                        HStack(spacing: 8) {
-                            if id == selectedEffort {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .frame(width: 16)
-                            } else {
-                                Spacer().frame(width: 16)
-                            }
-                            Text(id == "high" ? "\(name) (default)" : name)
-                                .font(.system(size: 14))
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            Divider()
-
-            // Mode
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Mode")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-                let modeOptions: [(AgentMode, String)] = [
-                    (.auto, "Auto (default)"),
-                    (.plan, "Plan"),
-                ]
-                ForEach(modeOptions, id: \.0) { mode, name in
-                    Button {
-                        agentMode = mode
-                        onModeChange(mode)
-                    } label: {
-                        HStack(spacing: 8) {
-                            if mode == agentMode {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .frame(width: 16)
-                            } else {
-                                Spacer().frame(width: 16)
-                            }
-                            Text(name)
-                                .font(.system(size: 14))
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            Divider()
-
-            // Access
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Access")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-                let accessOptions: [(AgentAccess, String)] = [
-                    (.supervised, "Supervised"),
-                    (.acceptEdits, "Accept Edits"),
-                    (.fullAccess, "Full access"),
-                ]
-                ForEach(accessOptions, id: \.0) { access, name in
-                    Button {
-                        agentAccess = access
-                        onAccessChange(access)
-                    } label: {
-                        HStack(spacing: 8) {
-                            if access == agentAccess {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .frame(width: 16)
-                            } else {
-                                Spacer().frame(width: 16)
-                            }
-                            Text(name)
-                                .font(.system(size: 14))
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            Divider()
-
             // Context Window
             VStack(alignment: .leading, spacing: 6) {
                 Text("Context Window")
@@ -1295,6 +1209,41 @@ struct AgentNodePanel: View {
                 agentAccess = parsed
                 onAccessChange(parsed)
             }
+        case "/context":
+            if let arg {
+                if arg.lowercased() == "auto" || arg.lowercased() == "automatic" {
+                    selectedContextWindow = nil
+                    onContextWindowChange(nil)
+                } else {
+                    // Parse token counts like "1M", "200K", "128000"
+                    let cleaned = arg.trimmingCharacters(in: .whitespaces).lowercased()
+                    var tokens: Int?
+                    if cleaned.hasSuffix("m") {
+                        if let val = Double(cleaned.dropLast()) { tokens = Int(val * 1_000_000) }
+                    } else if cleaned.hasSuffix("k") {
+                        if let val = Double(cleaned.dropLast()) { tokens = Int(val * 1_000) }
+                    } else {
+                        tokens = Int(cleaned)
+                    }
+                    if let tokens {
+                        selectedContextWindow = tokens
+                        onContextWindowChange(tokens)
+                    }
+                }
+            }
+        case "/help":
+            let help = """
+            /clear — Clear conversation
+            /model <id> — Switch model (e.g. /model opus)
+            /system <prompt> — Set system prompt
+            /effort <level> — low, medium, high, max, ultrathink
+            /mode <auto|plan> — Set agent mode
+            /access <supervised|acceptEdits|fullAccess> — Set access level
+            /context <auto|1M|200K|128000> — Set context window
+            /help — Show this help
+            """
+            let msg = ConversationMessage(role: .system, content: [.text(help)])
+            conversation.messages.append(msg)
         default:
             // Unknown command — send as regular message
             onSend(command, [])
@@ -1616,21 +1565,24 @@ private struct InputBarView: View {
     let hasPendingInput: Bool
     let selectedProvider: String
     let selectedProviderName: String
-    let selectedModel: String
+    @Binding var selectedModel: String
     let selectedModelName: String
-    @Binding var showSettings: Bool
-    let systemPromptText: String
-    let agentMode: AgentMode
-    let agentAccess: AgentAccess
-    let selectedEffort: String
+    @Binding var selectedEffort: String
+    @Binding var agentMode: AgentMode
+    @Binding var agentAccess: AgentAccess
+    let effortOptions: [(id: String, name: String)]
     let providerOptions: [(id: String, name: String)]
-    let availableModels: [AIModel]
+    let modelsForProvider: (String) -> [AIModel]
+    @Binding var showContextSettings: Bool
+    let contextSettingsPopover: AnyView
     let attachmentStrip: AnyView?
-    let settingsPopover: AnyView
     let onSend: () -> Void
     let onCancel: () -> Void
     let onSelectProvider: (String) -> Void
     let onModelChange: (String) -> Void
+    let onEffortChange: (String) -> Void
+    let onModeChange: (AgentMode) -> Void
+    let onAccessChange: (AgentAccess) -> Void
     let onOpenFilePicker: () -> Void
     let onPaste: ([NSItemProvider]) -> Void
 
@@ -1642,6 +1594,50 @@ private struct InputBarView: View {
         return isStreaming ? "Add to queue..." : "Ask for follow-up changes or attach images"
     }
 
+    private var providerIcon: String {
+        selectedProvider == "codex" ? "circle.hexagongrid" : "brain"
+    }
+
+    private var providerColor: Color {
+        selectedProvider == "codex" ? .green : .purple
+    }
+
+    private var effortDisplayName: String {
+        effortOptions.first(where: { $0.id == selectedEffort })?.name ?? selectedEffort.capitalized
+    }
+
+    private var modeIcon: String {
+        agentMode == .plan ? "map" : "bubble.left.and.bubble.right"
+    }
+
+    private var modeLabel: String {
+        agentMode == .plan ? "Plan" : "Chat"
+    }
+
+    private var accessIcon: String {
+        switch agentAccess {
+        case .supervised: return "lock.shield"
+        case .acceptEdits: return "pencil.and.outline"
+        case .fullAccess: return "lock.open"
+        }
+    }
+
+    private var accessLabel: String {
+        switch agentAccess {
+        case .supervised: return "Supervised"
+        case .acceptEdits: return "Accept edits"
+        case .fullAccess: return "Full access"
+        }
+    }
+
+    private func nextAccess(_ current: AgentAccess) -> AgentAccess {
+        switch current {
+        case .supervised: return .acceptEdits
+        case .acceptEdits: return .fullAccess
+        case .fullAccess: return .supervised
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if let attachmentStrip {
@@ -1650,7 +1646,9 @@ private struct InputBarView: View {
 
             PromptTextField(text: $inputText, placeholder: placeholder, inputFocused: inputFocused, onSend: onSend, onPaste: onPaste)
 
-            HStack(spacing: 6) {
+            HStack(spacing: 0) {
+                // Inline controls bar — height must match the old layout (24pt)
+                // to avoid stealing space from the messages scroll view above.
                 Button {
                     onOpenFilePicker()
                 } label: {
@@ -1658,72 +1656,157 @@ private struct InputBarView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.45))
                         .frame(width: 28, height: 24)
-                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
                 }
                 .buttonStyle(.plain)
                 .help("Attach images")
 
+                // Combined Provider + Model menu
                 Menu {
                     ForEach(providerOptions, id: \.id) { provider in
-                        Button {
-                            onSelectProvider(provider.id)
-                        } label: {
-                            if selectedProvider == provider.id {
-                                Label(provider.name, systemImage: "checkmark")
-                            } else {
-                                Text(provider.name)
+                        let models = modelsForProvider(provider.id)
+                        if models.count > 1 {
+                            Menu {
+                                ForEach(models) { model in
+                                    Button {
+                                        onSelectProvider(provider.id)
+                                        selectedModel = model.id
+                                        onModelChange(model.id)
+                                    } label: {
+                                        if model.id == selectedModel && provider.id == selectedProvider {
+                                            Label(model.name, systemImage: "checkmark")
+                                        } else {
+                                            Text(model.name)
+                                        }
+                                    }
+                                }
+                            } label: {
+                                if provider.id == selectedProvider {
+                                    Label(provider.name, systemImage: "checkmark")
+                                } else {
+                                    Text(provider.name)
+                                }
+                            }
+                        } else if let model = models.first {
+                            Button {
+                                onSelectProvider(provider.id)
+                                selectedModel = model.id
+                                onModelChange(model.id)
+                            } label: {
+                                if provider.id == selectedProvider {
+                                    Label(provider.name, systemImage: "checkmark")
+                                } else {
+                                    Text(provider.name)
+                                }
                             }
                         }
                     }
                 } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: selectedProvider == "codex" ? "circle.hexagongrid" : "brain")
+                        Image(systemName: providerIcon)
                             .font(.system(size: 10, weight: .semibold))
-                        Text(selectedProviderName)
+                        Text("\(selectedProviderName) \(selectedModelName)")
                             .font(.system(size: 11, weight: .medium))
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.35))
                     }
-                    .foregroundStyle(selectedProvider == "codex" ? .green : .purple)
+                    .foregroundStyle(providerColor)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
                 }
                 .menuStyle(.borderlessButton)
 
+                inlineDivider
+
+                // Effort menu
                 Menu {
-                    ForEach(availableModels) { model in
+                    ForEach(effortOptions, id: \.0) { id, name in
                         Button {
-                            onModelChange(model.id)
+                            selectedEffort = id
+                            onEffortChange(id)
                         } label: {
-                            if model.id == selectedModel {
-                                Label(model.name, systemImage: "checkmark")
+                            if id == selectedEffort {
+                                Label(id == "high" ? "\(name) (default)" : name, systemImage: "checkmark")
                             } else {
-                                Text(model.name)
+                                Text(id == "high" ? "\(name) (default)" : name)
                             }
                         }
                     }
                 } label: {
-                    Text(selectedModelName)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.55))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                    HStack(spacing: 3) {
+                        Text(effortDisplayName)
+                            .font(.system(size: 11, weight: .medium))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.35))
+                    }
+                    .foregroundStyle(.white.opacity(0.55))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
                 }
                 .menuStyle(.borderlessButton)
 
+                inlineDivider
+
+                // Mode toggle (click to switch)
                 Button {
-                    showSettings.toggle()
+                    let newMode: AgentMode = agentMode == .auto ? .plan : .auto
+                    agentMode = newMode
+                    onModeChange(newMode)
                 } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(!systemPromptText.isEmpty || agentMode != .auto || agentAccess != .fullAccess || selectedEffort != "high" ? .purple : .white.opacity(0.45))
-                        .frame(width: 28, height: 24)
-                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                    HStack(spacing: 4) {
+                        Image(systemName: modeIcon)
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(modeLabel)
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundStyle(.white.opacity(0.55))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Settings")
-                .popover(isPresented: $showSettings) {
-                    settingsPopover
+                .help("Toggle between Chat and Plan mode")
+
+                inlineDivider
+
+                // Access toggle (click to cycle)
+                Button {
+                    let next = nextAccess(agentAccess)
+                    agentAccess = next
+                    onAccessChange(next)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: accessIcon)
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(accessLabel)
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundStyle(.white.opacity(0.55))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Cycle access: Supervised → Accept edits → Full access")
+
+                inlineDivider
+
+                // Context window & system prompt settings
+                Button {
+                    showContextSettings.toggle()
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.35))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Context window & system prompt")
+                .popover(isPresented: $showContextSettings) {
+                    contextSettingsPopover
                 }
 
                 Spacer()
@@ -1764,6 +1847,13 @@ private struct InputBarView: View {
         )
         .padding(.horizontal, 10)
         .padding(.vertical, 10)
+    }
+
+    private var inlineDivider: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.1))
+            .frame(width: 1, height: 14)
+            .padding(.horizontal, 2)
     }
 }
 

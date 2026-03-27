@@ -423,8 +423,8 @@ public final class ClaudeCodeProvider: AIProvider, Sendable {
         guard let effort else { return nil }
 
         switch effort.lowercased() {
-        case "low", "medium", "high", "max":
-            return effort.lowercased()
+        case "low", "medium", "high", "max", "ultrathink":
+            return effort.lowercased() == "ultrathink" ? "max" : effort.lowercased()
         case "xhigh":
             return "max"
         case "minimal", "none":
