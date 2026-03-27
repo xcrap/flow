@@ -368,65 +368,95 @@ struct AgentNodePanel: View {
     // MARK: - Messages
 
     private var messagesArea: some View {
-        VerticalOnlyScrollView(
-            scrollToBottomTrigger: displayedMessages.count
-                + conversation.runtimeActivities.count
-                + (conversation.isStreaming ? 1 : 0)
-        ) {
-            VStack(alignment: .leading, spacing: 16) {
-                if conversation.messages.isEmpty &&
-                    conversation.recentRuntimeActivities.isEmpty &&
-                    !conversation.isStreaming
-                {
-                    emptyState
-                }
-
-                if !nonToolRuntimeActivities.isEmpty {
-                    RuntimeActivityList(activities: nonToolRuntimeActivities)
-                }
-
-                if hasHiddenHistory {
-                    Button {
-                        showFullHistory.toggle()
-                    } label: {
-                        Text(
-                            showFullHistory
-                                ? "Show only recent \(Self.maxRenderedMessages) messages"
-                                : "Show earlier \(hiddenMessageCount) messages"
-                        )
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(Color(nsColor: .controlBackgroundColor).opacity(0.2), in: RoundedRectangle(cornerRadius: 10))
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if conversation.messages.isEmpty &&
+                        conversation.recentRuntimeActivities.isEmpty &&
+                        !conversation.isStreaming
+                    {
+                        emptyState
                     }
-                    .buttonStyle(.plain)
-                }
 
-                ForEach(Array(groupedMessages.enumerated()), id: \.element.id) { _, group in
-                    switch group {
-                    case .single(let message):
-                        MessageRow(message: message)
-                            .equatable()
-                            .id(message.id)
-                    case .toolCalls(let messages):
-                        ToolCallGroupView(messages: messages)
-                            .equatable()
-                            .id(group.id)
+                    if !nonToolRuntimeActivities.isEmpty {
+                        RuntimeActivityList(activities: nonToolRuntimeActivities)
+                    }
+
+                    if hasHiddenHistory {
+                        Button {
+                            showFullHistory.toggle()
+                        } label: {
+                            Text(
+                                showFullHistory
+                                    ? "Show only recent \(Self.maxRenderedMessages) messages"
+                                    : "Show earlier \(hiddenMessageCount) messages"
+                            )
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(Color(nsColor: .controlBackgroundColor).opacity(0.2), in: RoundedRectangle(cornerRadius: 10))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    ForEach(Array(groupedMessages.enumerated()), id: \.element.id) { _, group in
+                        switch group {
+                        case .single(let message):
+                            MessageRow(message: message)
+                                .equatable()
+                                .id(message.id)
+                        case .toolCalls(let messages):
+                            ToolCallGroupView(messages: messages)
+                                .equatable()
+                                .id(group.id)
+                        }
+                    }
+
+                    if conversation.isStreaming && !conversation.streamingText.isEmpty {
+                        streamingRow
+                            .id("streaming")
+                    }
+
+                    if let error = conversation.error {
+                        errorRow(error)
                     }
                 }
-
-                if conversation.isStreaming && !conversation.streamingText.isEmpty {
-                    streamingRow
-                        .id("streaming")
-                }
-
-                if let error = conversation.error {
-                    errorRow(error)
+                .padding(16)
+            }
+            .onAppear {
+                scrollMessages(with: proxy, animated: false)
+            }
+            .onChange(of: displayedMessages.count) {
+                scrollMessages(with: proxy, animated: true)
+            }
+            .onChange(of: conversation.runtimeActivities.count) {
+                scrollMessages(with: proxy, animated: true)
+            }
+            .onChange(of: conversation.streamingText) {
+                if !conversation.streamingText.isEmpty {
+                    proxy.scrollTo("streaming", anchor: .bottom)
                 }
             }
-            .padding(16)
+        }
+    }
+
+    private func scrollMessages(with proxy: ScrollViewProxy, animated: Bool) {
+        let scroll = {
+            if conversation.isStreaming && !conversation.streamingText.isEmpty {
+                proxy.scrollTo("streaming", anchor: .bottom)
+            } else if let lastGroup = groupedMessages.last {
+                proxy.scrollTo(lastGroup.id, anchor: .bottom)
+            }
+        }
+
+        if animated {
+            withAnimation(.easeOut(duration: 0.15)) {
+                scroll()
+            }
+        } else {
+            scroll()
         }
     }
 
@@ -1886,251 +1916,5 @@ private struct PromptTextField: View {
         .padding(.horizontal, 16)
         .padding(.top, 14)
         .padding(.bottom, 10)
-    }
-}
-
-// MARK: - Vertical-Only Scroll View (AppKit-backed)
-
-/// Replaces SwiftUI's ScrollView(.vertical) with a fully controlled NSScrollView.
-/// SwiftUI's ScrollView on macOS allows horizontal bounce/elasticity from:
-/// 1) Default NSScrollView horizontal elasticity
-/// 2) Nested NSScrollViews created by .textSelection(.enabled) on Text views
-/// This custom view creates its own NSScrollView with horizontal scrolling completely
-/// disabled, and pins the document view width to the clip view to prevent overflow.
-/// Also implements "stick to bottom" auto-scrolling for chat-style content.
-private struct VerticalOnlyScrollView<Content: View>: NSViewRepresentable {
-    let content: Content
-    let scrollToBottomTrigger: Int
-
-    init(scrollToBottomTrigger: Int, @ViewBuilder content: () -> Content) {
-        self.content = content()
-        self.scrollToBottomTrigger = scrollToBottomTrigger
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = _VerticalOnlyNSScrollView()
-        scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = false
-        scrollView.horizontalScrollElasticity = .none
-        scrollView.verticalScrollElasticity = .allowed
-        scrollView.autohidesScrollers = true
-        scrollView.drawsBackground = false
-        scrollView.scrollerStyle = .overlay
-
-        // Replace default clip view with one that blocks horizontal movement
-        let clipView = _VerticalOnlyClipView()
-        clipView.drawsBackground = false
-        scrollView.contentView = clipView
-
-        let hostingView = NSHostingView(rootView: content)
-        hostingView.translatesAutoresizingMaskIntoConstraints = false
-        hostingView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        let documentView = _FlippedDocumentView()
-        documentView.translatesAutoresizingMaskIntoConstraints = false
-        documentView.addSubview(hostingView)
-        scrollView.documentView = documentView
-
-        NSLayoutConstraint.activate([
-            hostingView.topAnchor.constraint(equalTo: documentView.topAnchor),
-            hostingView.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
-            hostingView.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
-            hostingView.bottomAnchor.constraint(equalTo: documentView.bottomAnchor),
-            documentView.widthAnchor.constraint(equalTo: clipView.widthAnchor),
-        ])
-
-        context.coordinator.scrollView = scrollView
-        context.coordinator.hostingView = hostingView
-        context.coordinator.setupObservers()
-
-        // Initial scroll to bottom (deferred so layout completes first)
-        DispatchQueue.main.async {
-            context.coordinator.scrollToBottom(animated: false)
-        }
-
-        return scrollView
-    }
-
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        context.coordinator.hostingView?.rootView = content
-
-        // Re-enforce horizontal bounce disable on the outer scroll view
-        // and recursively patch any nested NSScrollViews from .textSelection(.enabled)
-        DispatchQueue.main.async {
-            scrollView.horizontalScrollElasticity = .none
-            scrollView.hasHorizontalScroller = false
-            Self.patchNestedScrollViews(in: scrollView)
-        }
-
-        // Scroll to bottom when trigger changes (new messages, streaming start).
-        if scrollToBottomTrigger != context.coordinator.lastScrollTrigger {
-            context.coordinator.lastScrollTrigger = scrollToBottomTrigger
-            context.coordinator.isAtBottom = true
-            DispatchQueue.main.async {
-                context.coordinator.scrollToBottom(animated: true)
-            }
-        } else if context.coordinator.isAtBottom {
-            // During streaming, content grows but the trigger stays constant.
-            // Scroll after the hosting view lays out the new content.
-            DispatchQueue.main.async {
-                context.coordinator.scrollToBottom(animated: false)
-            }
-        }
-    }
-
-    private static func patchNestedScrollViews(in view: NSView) {
-        for child in view.subviews {
-            if let sv = child as? NSScrollView {
-                sv.hasHorizontalScroller = false
-                sv.horizontalScrollElasticity = .none
-            }
-            patchNestedScrollViews(in: child)
-        }
-    }
-
-    @MainActor
-    final class Coordinator: NSObject {
-        weak var scrollView: NSScrollView?
-        var hostingView: NSHostingView<Content>?
-        var lastScrollTrigger = 0
-        var isAtBottom = true
-        private var isAnimatingScroll = false
-        nonisolated(unsafe) private var eventMonitor: Any?
-
-        func setupObservers() {
-            guard let scrollView else { return }
-
-            scrollView.contentView.postsBoundsChangedNotifications = true
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(boundsDidChange),
-                name: NSView.boundsDidChangeNotification,
-                object: scrollView.contentView
-            )
-
-            scrollView.documentView?.postsFrameChangedNotifications = true
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(documentFrameDidChange),
-                name: NSView.frameDidChangeNotification,
-                object: scrollView.documentView
-            )
-
-            // Install local event monitor to intercept scroll wheel events and
-            // zero out ALL horizontal deltas before they reach any NSScrollView
-            // (outer or nested from .textSelection(.enabled)).
-            // Uses AppKit hit testing instead of coordinate conversion to
-            // correctly handle .scaleEffect() canvas zoom transforms.
-            let weakSV: NSScrollView? = scrollView
-            eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
-                guard let sv = weakSV else { return event }
-                guard let window = event.window, window === sv.window else { return event }
-
-                // Hit test to check if the event targets our scroll view or any descendant
-                guard let hitView = window.contentView?.hitTest(event.locationInWindow),
-                      hitView === sv || hitView.isDescendant(of: sv) else { return event }
-
-                // Zero out ALL horizontal scroll deltas unconditionally via CGEvent
-                guard let cgEvent = event.cgEvent?.copy() else { return event }
-                cgEvent.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis2, value: 0)
-                cgEvent.setIntegerValueField(.scrollWheelEventDeltaAxis2, value: 0)
-                cgEvent.setIntegerValueField(.scrollWheelEventPointDeltaAxis2, value: 0)
-
-                return NSEvent(cgEvent: cgEvent) ?? event
-            }
-        }
-
-        @objc private func boundsDidChange(_ notification: Notification) {
-            // Skip during programmatic scroll animations — the intermediate
-            // positions would incorrectly set isAtBottom = false
-            guard !isAnimatingScroll else { return }
-            guard let scrollView, let documentView = scrollView.documentView else { return }
-            let maxY = documentView.frame.height - scrollView.contentView.bounds.height
-            let currentY = scrollView.contentView.bounds.origin.y
-            isAtBottom = currentY >= maxY - 20
-        }
-
-        @objc private func documentFrameDidChange(_ notification: Notification) {
-            if isAtBottom {
-                scrollToBottom(animated: false)
-            }
-        }
-
-        func scrollToBottom(animated: Bool) {
-            guard let scrollView, let documentView = scrollView.documentView else { return }
-            let maxY = documentView.frame.height - scrollView.contentView.bounds.height
-            guard maxY > 0 else { return }
-            let point = NSPoint(x: 0, y: maxY)
-            isAnimatingScroll = true
-            if animated {
-                NSAnimationContext.runAnimationGroup { ctx in
-                    ctx.duration = 0.15
-                    ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                    scrollView.contentView.animator().setBoundsOrigin(point)
-                } completionHandler: { [weak self] in
-                    DispatchQueue.main.async {
-                        self?.isAnimatingScroll = false
-                        self?.isAtBottom = true
-                    }
-                }
-            } else {
-                scrollView.contentView.scroll(to: point)
-                isAnimatingScroll = false
-            }
-            scrollView.reflectScrolledClipView(scrollView.contentView)
-            isAtBottom = true
-        }
-
-        deinit {
-            if let eventMonitor {
-                NSEvent.removeMonitor(eventMonitor)
-            }
-            NotificationCenter.default.removeObserver(self)
-        }
-    }
-}
-
-private final class _FlippedDocumentView: NSView {
-    override var isFlipped: Bool { true }
-}
-
-/// NSScrollView subclass that strips horizontal deltas from all scroll wheel events.
-private final class _VerticalOnlyNSScrollView: NSScrollView {
-    override func scrollWheel(with event: NSEvent) {
-        guard let cgEvent = event.cgEvent?.copy() else {
-            super.scrollWheel(with: event)
-            return
-        }
-        cgEvent.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis2, value: 0)
-        cgEvent.setIntegerValueField(.scrollWheelEventDeltaAxis2, value: 0)
-        cgEvent.setIntegerValueField(.scrollWheelEventPointDeltaAxis2, value: 0)
-        if let modified = NSEvent(cgEvent: cgEvent) {
-            super.scrollWheel(with: modified)
-        } else {
-            super.scrollWheel(with: event)
-        }
-    }
-}
-
-/// NSClipView subclass that physically prevents horizontal scroll position changes.
-/// Even if a nested scroll view or SwiftUI's internal gesture handling tries to
-/// move content horizontally, the clip view's origin.x stays at 0.
-private final class _VerticalOnlyClipView: NSClipView {
-    override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
-        var bounds = super.constrainBoundsRect(proposedBounds)
-        bounds.origin.x = 0
-        return bounds
-    }
-
-    override func scroll(to newOrigin: NSPoint) {
-        super.scroll(to: NSPoint(x: 0, y: newOrigin.y))
-    }
-
-    override func setBoundsOrigin(_ newOrigin: NSPoint) {
-        super.setBoundsOrigin(NSPoint(x: 0, y: newOrigin.y))
     }
 }
